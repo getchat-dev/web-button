@@ -20,6 +20,10 @@ export declare class GetChatButton extends HTMLElement {
     // Method to set the badge value
     setBadge(value: number): void;
 
+    // Method to set the icon
+    // it accepts only svg string or url
+    setCustomIcon(icon: string, catchError: boolean): boolean
+
     // Method to set styles
     setStyles(styles: object): void;
 

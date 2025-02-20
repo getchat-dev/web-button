@@ -9,7 +9,7 @@ let DelayedVKResizeHandler = null;
 
 let isInited = false;
 
-initVirtualkeyboardAPI = function() {
+const initVirtualkeyboardAPI = function() {
     navigator.virtualKeyboard.overlaysContent = true;
 
     lastVKHeight = null;

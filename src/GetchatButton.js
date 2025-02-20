@@ -11,11 +11,51 @@ const transformAttributeToCss = function (node, attrbite, type) {
 
 const supportedAttributes = ['bgcolor', 'color', 'bdradius', 'bdwidth', 'bdcolor', 'badgebg', 'badgecolor'];
 
+const defaultIcon = `
+<svg class="button-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+    <path fill="inherit"
+        d="M7 14h6a.968.968 0 0 0 .713-.288A.964.964 0 0 0 14 13a.968.968 0 0 0-.288-.713A.964.964 0 0 0 13 12H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 13c0 .283.096.521.288.713.192.192.43.288.712.287Zm0-3h10a.968.968 0 0 0 .713-.288A.964.964 0 0 0 18 10a.968.968 0 0 0-.288-.713A.964.964 0 0 0 17 9H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 10c0 .283.096.521.288.713.192.192.43.288.712.287Zm0-3h10a.968.968 0 0 0 .713-.288A.964.964 0 0 0 18 7a.968.968 0 0 0-.288-.713A.964.964 0 0 0 17 6H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 7c0 .283.096.521.288.713.192.192.43.288.712.287ZM6 18l-2.3 2.3c-.317.317-.68.388-1.088.213-.409-.175-.613-.487-.612-.938V4c0-.55.196-1.021.588-1.413A1.922 1.922 0 0 1 4 2h16c.55 0 1.021.196 1.413.588.392.392.588.863.587 1.412v12c0 .55-.196 1.021-.588 1.413A1.922 1.922 0 0 1 20 18H6Zm-.85-2H20V4H4v13.125L5.15 16Z" />
+</svg>
+`;
+
+const validateSvg = function (svg) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+    if (doc.querySelector('parsererror')) {
+        return false;
+    }
+
+    return true;
+}
+
+const validateUrl = function (url) {
+    if(! window.URL) {
+        // URL is not supported, but i don't want to throw an error
+        return true;
+    }
+
+    const parsed = URL.parse(url);
+    if(parsed) {
+        if(! (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
+            return false;
+        }
+        if(parsed.pathname === '' && parsed.searchParams.size < 1) {
+            return false;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 export default class GetchatButton extends HTMLElement {
 
     #chatInstance;
     #rendered = false;
     #observer;
+    #icon = defaultIcon;
 
     constructor() {
         super();
@@ -96,6 +136,52 @@ export default class GetchatButton extends HTMLElement {
         }
     }
 
+    #setCustomIcon(icon) {
+        if(this.#rendered) {
+            const $node = this.shadowRoot.querySelector('.button-icon');
+            if($node && $node instanceof HTMLElement) {
+                $node.innerHTML = icon;
+            }
+        }
+        else {
+            this.#icon = icon;
+        }
+    }
+
+    setCustomIcon(icon, catchError = false) {
+
+        if (typeof icon !== 'string') {
+            if(catchError) {
+                throw new Error('Icon must be a string');
+            }
+            return false;
+        }
+
+        icon = icon.trim();
+
+        let isUrl = false;
+        let isDataUrl = false;
+
+        if (icon.startsWith('<svg')) {
+            if(validateSvg(icon)) {
+                this.#setCustomIcon(icon);
+                return true;
+            }
+        }
+        else if ((isUrl = icon.startsWith('http')) || (isDataUrl = icon.startsWith('data:image/'))) {
+            if((isUrl && validateUrl(icon)) || isDataUrl) {
+                this.#setCustomIcon(`<img src="${icon}" alt="icon" />`);
+                return true;
+            }
+        }
+
+        if(catchError) {
+            throw new Error('Icon must be a valid SVG or URL');
+        }
+
+        return false;
+    }
+
     setStyles(styles) {
         const styleElement = this.shadowRoot.getElementById('dynamic-styles');
         let cssString = '';
@@ -115,10 +201,7 @@ export default class GetchatButton extends HTMLElement {
             <style id="dynamic-styles"></style>
             <button class="button">
                 <div class="button-icon">
-                    <svg class="button-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-                        <path fill="inherit"
-                            d="M7 14h6a.968.968 0 0 0 .713-.288A.964.964 0 0 0 14 13a.968.968 0 0 0-.288-.713A.964.964 0 0 0 13 12H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 13c0 .283.096.521.288.713.192.192.43.288.712.287Zm0-3h10a.968.968 0 0 0 .713-.288A.964.964 0 0 0 18 10a.968.968 0 0 0-.288-.713A.964.964 0 0 0 17 9H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 10c0 .283.096.521.288.713.192.192.43.288.712.287Zm0-3h10a.968.968 0 0 0 .713-.288A.964.964 0 0 0 18 7a.968.968 0 0 0-.288-.713A.964.964 0 0 0 17 6H7a.968.968 0 0 0-.713.288A.964.964 0 0 0 6 7c0 .283.096.521.288.713.192.192.43.288.712.287ZM6 18l-2.3 2.3c-.317.317-.68.388-1.088.213-.409-.175-.613-.487-.612-.938V4c0-.55.196-1.021.588-1.413A1.922 1.922 0 0 1 4 2h16c.55 0 1.021.196 1.413.588.392.392.588.863.587 1.412v12c0 .55-.196 1.021-.588 1.413A1.922 1.922 0 0 1 20 18H6Zm-.85-2H20V4H4v13.125L5.15 16Z" />
-                    </svg>
+                    ${this.#icon}
                 </div>
                 <div class="unreads"></div>
                 <div class="loader"></div>
@@ -173,6 +256,10 @@ export default class GetchatButton extends HTMLElement {
                 transition: opacity .3s ease;
             `,
             '.button-icon > svg': `
+                width: 100%;
+            `,
+            '.button-icon > img': `
+                display: block;
                 width: 100%;
             `,
             '.unreads': `

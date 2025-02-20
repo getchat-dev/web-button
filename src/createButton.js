@@ -1,12 +1,10 @@
-import { uuid, addClassName, unescapeHTML, compartmentalizeCssValue, buildQueryString, asyncEmbedIframe, isPlainObject, scalarToBoolean, parseClassNames } from '@/utils'
+import { uuid, addClassName, unescapeHTML, compartmentalizeCssValue, isPlainObject, parseClassNames } from '@/utils'
 
 import GetchatButton from '@/GetchatButton';
 
 import Chat from '@/Chat';
 
 import styles from '@/outer.module.css';
-
-import onMessage from '@/onMessage'
 
 /**
  * Options for creating a chat button.
@@ -115,6 +113,10 @@ export default async function ({
 
             if (chatClassName) {
                 addClassName(chatNode, parseClassNames(chatClassName));
+            }
+
+            if (isPlainObject(chatStyle)) {
+                Object.assign(chatNode.style, chatStyle);
             }
 
             if (!doesElementOnPage || !document.body.contains(chatNode)) {

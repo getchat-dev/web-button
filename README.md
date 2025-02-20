@@ -93,7 +93,7 @@ const messenger: Chat = document.querySelector('getchat-button').getChatInstance
 ```
 
 
-In the [Interfaces](#createbuttonoptions) section, you will find all the available parameters that can be passed to the ]`createButton` function.
+In the [Interfaces](#createbuttonoptions) section, you will find all the available parameters that can be passed to the `createButton` function.
 
 ### How to Know When the Chat is Loaded
 
@@ -111,7 +111,7 @@ messenger.whenReady().then(async function () {
 });
 ```
 
-### Changing the Button Style
+### How to Change the Button Style
 
 Currently, the library supports changing the following seven parameters:
 
@@ -154,6 +154,38 @@ messenger.whenReady().then(async function () {
 });
 ```
 
+### How to Set a Custom Icon
+
+Users can customize the button icon by passing either a **URL** or an **SVG string** to the `setCustomIcon` method.
+
+#### Example Usage
+
+**Using an Icon URL:**
+```typescript
+const button: GetChatButton = messenger.getButton();
+if (button) {
+    button.setCustomIcon('https://example.com/my-custom-icon.png');
+}
+```
+
+**Using an SVG String:**
+```typescript
+const button: GetChatButton = messenger.getButton();
+if (button) {
+    button.setCustomIcon(`
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="black" stroke-width="2" fill="white"/>
+            <path d="M8 12L12 16L16 12" stroke="black" stroke-width="2"/>
+        </svg>
+    `);
+}
+```
+
+#### Important Notes
+- Set the icon as soon as possible: Avoid waiting for whenReady(), as this method waits for the chat iframe to fully load. However, setting the button icon does not depend on the iframe and should be done immediately after retrieving the button instance.
+- Icon format flexibility: The method supports both image URLs and inline SVG, allowing for easy customization.
+
+
 ### Handling Chat Events
 
 To handle chat events, you can use the `addEventListener` method. For example, to handle the event of a new message, you can use the following code. It opens the chat upon receiving a new message and logs "New message received" to the console.
@@ -168,6 +200,20 @@ messenger.addEventListener('getchat.chat.message.new', function () {
     console.log('New message received');
 });
 ```
+
+### How to Check the Library Version at Runtime
+
+To determine which version of the `GetChat Web Button` library is currently loaded, you can access the `version` property on the global `window.GetChat` object.
+
+#### Example Usage:
+```typescript
+console.log('GetChat Web Button version:', window.GetChat?.version);
+```
+
+**Notes**:
+
+This property is available only after the library is fully loaded.
+If window.GetChat is undefined, it means the script has not yet been initialized.
 
 ## Interfaces
 
@@ -233,3 +279,29 @@ messenger.addEventListener('getchat.chat.message.new', function () {
 | `getChatNode`       | N/A                                                | `HTMLElement \| null`       | Retrieves the chat container element.                         |
 | `getChatIframeNode` | N/A                                                | `HTMLElement \| null`       | Retrieves the chat's iframe element, if using an iframe.      |
 | `rpc`               | `method: string, params: any[], timeout?: number`  | `Promise<any>`              | Performs a remote procedure call to the chat service.         |
+
+### GetChatButton Class
+
+The `GetChatButton` class represents the custom chat button element and provides various methods for managing its state, icon, styles, and chat instance.
+
+| Method               | Parameters                                      | Returns          | Description                                                   |
+|----------------------|-----------------------------------------------|------------------|---------------------------------------------------------------|
+| `constructor`        | N/A                                           | N/A              | Initializes a new instance of `GetChatButton`.                |
+| `setChatInstance`    | `chatInstance: Chat`                         | `void`           | Associates a `Chat` instance with this button.                |
+| `getChatInstance`    | N/A                                           | `Chat`           | Retrieves the associated `Chat` instance.                     |
+| `setState`          | `state: 'loaded' | 'loading'`                | `void`           | Sets the state of the button (e.g., `"loading"`, `"loaded"`). |
+| `setBadge`          | `value: number`                               | `void`           | Sets the badge count on the button.                           |
+| `setCustomIcon`     | `icon: string, catchError: boolean`           | `boolean`        | Sets a custom icon, either as an image URL or an SVG string.  |
+| `setStyles`         | `styles: object`                              | `void`           | Applies custom styles to the button.                          |
+| `render`            | N/A                                           | `void`           | Re-renders the button element.                                |
+
+#### Custom Element Registration
+The `GetChatButton` class is registered as a custom HTML element and can be used in the DOM as `<getchat-button>`. It is also available in the global `HTMLElementTagNameMap`:
+
+```typescript
+declare global {
+    interface HTMLElementTagNameMap {
+        'getchat-button': GetChatButton;
+    }
+}
+```
