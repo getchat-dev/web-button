@@ -151,6 +151,14 @@ export default class Chat {
         });
     }
 
+    isLoaded() {
+        return this.#isChatLoaded === 1;
+    }
+
+    isOpened() {
+        return this.#isChatOpened;
+    }
+
     toggle() {
         return new Promise(async (resolve, reject) => {
 

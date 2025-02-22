@@ -65,6 +65,10 @@ export declare class Chat {
 
     load(showLoader?: boolean): Promise<void>;
 
+    isLoaded(): boolean;
+
+    isOpened(): boolean;
+
     toggle(): Promise<void>;
 
     open(): Promise<void>;

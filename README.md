@@ -201,6 +201,19 @@ messenger.addEventListener('getchat.chat.message.new', function () {
 });
 ```
 
+### How to Know When the Chat Window is Opened or Closed
+
+To determine whether the chat is currently open, you can use the `isOpened` method. This method returns `true` if the chat window is open and `false` otherwise.
+
+#### Example Usage
+```typescript
+if (messenger.isOpened()) {
+    console.log('Chat is open');
+} else {
+    console.log('Chat is closed');
+}
+```
+
 ### How to Check the Library Version at Runtime
 
 To determine which version of the `GetChat Web Button` library is currently loaded, you can access the `version` property on the global `window.GetChat` object.
@@ -271,6 +284,8 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | `constructor`       | `options: ChatOptions`                             | N/A                         | Initializes a new chat instance with the provided options.    |
 | `whenReady`         | N/A                                                | `Promise<void>`             | Resolves when the messenger is loaded and ready for interaction.              |
 | `load`              | `showLoader?: boolean`                             | `Promise<void>`             | Loads the chat interface, optionally showing a loader.        |
+| `isLoaded`      | N/A                                                | `boolean`                   | Returns `true` if the chat iframe is fully loaded.         |
+| `isOpened`      | N/A                                                | `boolean`                   | Returns `true` if the chat window is currently open.       |
 | `toggle`            | N/A                                                | `Promise<void>`             | Toggles the visibility of the chat interface.                 |
 | `open`              | N/A                                                | `Promise<void>`             | Opens the chat interface.                                     |
 | `close`             | N/A                                                | `Promise<void>`             | Closes the chat interface.                                    |
