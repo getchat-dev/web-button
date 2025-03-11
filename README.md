@@ -185,6 +185,70 @@ if (button) {
 - Set the icon as soon as possible: Avoid waiting for whenReady(), as this method waits for the chat iframe to fully load. However, setting the button icon does not depend on the iframe and should be done immediately after retrieving the button instance.
 - Icon format flexibility: The method supports both image URLs and inline SVG, allowing for easy customization.
 
+### How to Work with Push Notifications
+
+If you want to enable push notifications, you need to request permission from the user. The library provides a method called initWebPushNotification that initializes the web push notification system and manages notification permissions.
+
+#### Example: Calling the initWebPushNotification Method
+
+You must call this method strictly after the chat is loaded and ready. The method returns an object with two properties: status and token.
+- The status property can have one of the following values:
+  - "granted": The user has allowed notifications.
+  - "denied": The user has blocked notifications.
+  - "default": The user has not yet made a decision.
+  - "unsupported": The browser does not support web push notifications.
+- The token property contains the FCM token if the status is "granted"; otherwise, it is null.
+
+Using the status property, you can determine the current notification permission state to display an appropriate message to the user or update the notification toggler in your web application's settings.
+
+```typescript
+await chat.whenReady();
+const { status, token } = await chat.initWebPushNotification();
+
+if (status === "granted" && token) {
+    console.log("You have granted permission to receive notifications. FCM Token:", token);
+}
+else if(status === "denied") {
+    console.log("You have denied permission to receive notifications.");
+}
+else if(status === "default") {
+    console.log("You have not yet made a decision on whether to receive notifications.");
+}
+else if(status === "unsupported") {
+    console.log("Your browser does not support web push notifications.");
+}
+```
+
+#### Example: Requesting Notification Permission
+
+```typescript
+await chat.whenReady();
+// This must be called after the chat is fully initialized.
+const { status, token } = await chat.initWebPushNotification();
+
+// The browser allows requesting notification permission only if the status is "default".
+// Otherwise, the user can change permissions only in the browser settings.
+if (status === "default") {
+    const activatePushButton = document.querySelector<HTMLButtonElement>('button[data-action="activate-push"]');
+    if (activatePushButton) {
+        activatePushButton.addEventListener("click", async (e: MouseEvent) => {
+            e.preventDefault();
+
+            try {
+                const result: NotificationPermissionResult = await chat.requestNotificationPermission(e);
+                console.log("Notification permission status:", result.status);
+                if (result.token) {
+                    console.log("FCM Token:", result.token);
+                }
+            }
+            catch (error) {
+                console.error("Failed to request notification permission:", error);
+            }
+        });
+    }
+}
+```
+
 
 ### Handling Chat Events
 
@@ -284,16 +348,17 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | `constructor`       | `options: ChatOptions`                             | N/A                         | Initializes a new chat instance with the provided options.    |
 | `whenReady`         | N/A                                                | `Promise<void>`             | Resolves when the messenger is loaded and ready for interaction.              |
 | `load`              | `showLoader?: boolean`                             | `Promise<void>`             | Loads the chat interface, optionally showing a loader.        |
-| `isLoaded`      | N/A                                                | `boolean`                   | Returns `true` if the chat iframe is fully loaded.         |
-| `isOpened`      | N/A                                                | `boolean`                   | Returns `true` if the chat window is currently open.       |
+| `isLoaded`          | N/A                                                | `boolean`                   | Returns `true` if the chat iframe is fully loaded.           |
+| `isOpened`          | N/A                                                | `boolean`                   | Returns `true` if the chat window is currently open.         |
 | `toggle`            | N/A                                                | `Promise<void>`             | Toggles the visibility of the chat interface.                 |
 | `open`              | N/A                                                | `Promise<void>`             | Opens the chat interface.                                     |
 | `close`             | N/A                                                | `Promise<void>`             | Closes the chat interface.                                    |
-| `addEventListener`  | `event: string, listener: () => void` | N/A        | Registers an event listener for specified chat events.        |
+| `addEventListener`  | `event: string, listener: () => void`              | N/A                         | Registers an event listener for specified chat events.        |
 | `getButton`         | N/A                                                | `HTMLElement \| null`       | Returns the chat trigger button element, if any.              |
 | `getChatNode`       | N/A                                                | `HTMLElement \| null`       | Retrieves the chat container element.                         |
 | `getChatIframeNode` | N/A                                                | `HTMLElement \| null`       | Retrieves the chat's iframe element, if using an iframe.      |
 | `rpc`               | `method: string, params: any[], timeout?: number`  | `Promise<any>`              | Performs a remote procedure call to the chat service.         |
+| `initWebPushNotifications` | N/A                                        | `Promise<{ status: "granted" \| "denied" \| "default" \| "unsupported", token: string \| null }>` | Initializes web push notifications, retrieves FCM configuration, and manages notification permissions. |
 
 ### GetChatButton Class
 

@@ -4,6 +4,8 @@ import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
 import escapeHandler from '@/escapeHandler';
 
+import fcmManager from '@/fcm';
+
 import styles from '@/outer.module.css';
 
 export default class Chat {
@@ -28,6 +30,9 @@ export default class Chat {
     #onAfterClose;
 
     #readyPromise;
+
+    #fcmManager;
+    #requestNotificationPermission;
 
     constructor({ id, url, button, closeOnEscape = true, autoload, autoopen = false, autoopenDelay, onBeforeEmbedChat, onChatLoaded, onBeforeOpen, onAfterOpen, onBeforeClose, onAfterClose }) {
         this.#chatUrl = url;
@@ -335,12 +340,171 @@ export default class Chat {
             const uuid = iframeRPC(this.#chatIframe, method, params);
             if (uuid) {
                 onMessage('response.' + uuid, rpcHandler, this.#chatIframe);
-                if(timeout > 0) {
+                if (timeout > 0) {
                     to = setTimeout(() => {
+                        console.info('RPC Timeout', method, params);
                         reject('Timeout');
                     }, timeout);
                 }
             }
         });
+    }
+
+    /**
+     * Initializes web push notifications by retrieving Firebase Cloud Messaging (FCM) configuration and VAPID key.
+     *
+     * @async
+     * @function initWebPushNotification
+     *
+     * @returns {Promise<{ status: "granted" | "denied" | "default" | "unsupported", token: string | null }>}
+     * - `status`: `"granted"` if notifications are allowed, `"denied"` if blocked, `"default"` if undecided, `"unsupported"` if the browser does not support notifications.
+     * - `token`: The FCM token if available; otherwise, `null`.
+     *
+     * @description
+     * This method performs the following actions:
+     * 1. Retrieves Firebase Cloud Messaging (FCM) configuration via RPC.
+     * 2. Retrieves the VAPID (Voluntary Application Server Identification) key via RPC.
+     * 3. Initializes the FCM manager with the retrieved configuration and key.
+     * 4. Requests and processes notification permission status.
+     * 5. If permission is `"default"`, sets up an event listener to handle future permission requests (`"getchat.webpush.request"`).
+     * 6. If permission is `"granted"`, sets up an event listener for web push reset events (`"getchat.webpush.reset"`).
+     * 7. Sends the permission status to the backend via RPC.
+     *
+     * @throws {Error}
+     * - If fetching the FCM configuration fails.
+     * - If retrieving the VAPID key fails.
+     * - If there is an issue initializing the FCM manager.
+     * - If an error occurs while processing notification permissions.
+     *
+     * @example
+     * // Typical usage in a class method
+     * try {
+     *   const result = await this.initWebPushNotification();
+     *   console.log('Permission status:', result.status);
+     *   if (result.token) {
+     *     console.log('FCM token retrieved:', result.token);
+     *   }
+     * } catch (error) {
+     *   console.error('Failed to initialize web push notifications:', error);
+     * }
+     */
+    async initWebPushNotification() {
+        // const module = await import('@/fcm.js');
+        // if(! module) {
+        //     throw new Error('Failed to load fcm.js');
+        // }
+        // if(! module.default) {
+        //     throw new Error('fcm.js does not have default export');
+        // }
+
+        const { config: fcmConfig } = await this.rpc('getchat.messenger.getFCMConfig');
+        if (!fcmConfig) {
+            throw new Error('Failed to get FCM config');
+        }
+
+        const { vapidKey } = await this.rpc('getchat.messenger.getVapidKey');
+        if (!vapidKey) {
+            throw new Error('Failed to get Vapid Key');
+        }
+
+        // this.#fcmManager = module.default(fcmConfig, vapidKey);
+        this.#fcmManager = new fcmManager(fcmConfig, vapidKey);
+        const permission = await this.#fcmManager.getNotificationPermissionAndToken();
+
+        this.rpc('getchat.messenger.webpush.permission.set', permission);
+
+        if (permission.status === 'default') {
+
+            const onRequest = async (e, data) => {
+
+                const response = {
+                    status: false
+                };
+
+                try {
+                    const permission = await this.requestNotificationPermission();
+                    response.permission = permission;
+                    if (permission !== false && permission?.status === 'granted' && permission?.token) {
+                        response.status = true;
+                    }
+                }
+                catch (e) {
+                    response.error = e.message;
+                }
+
+                if (data?.cbId) {
+                    iframeRPC(this.#chatIframe, 'response.' + data.cbId, {
+                        type: 'response.' + data.cbId,
+                        data: response
+                    });
+                }
+
+                if (response.status) {
+                    // it will unsubscribe the event listener
+                    return -1;
+                }
+            }
+
+            this.addEventListener('getchat.webpush.request', onRequest);
+        }
+        else if (permission.status === 'granted') {
+
+            const onRequest = async (e, data) => {
+
+                const response = {
+                    status: true
+                };
+
+                try {
+                    await this.resetNotificationData();
+                }
+                catch (e) {
+                    response.error = e.message;
+                }
+
+                if (data?.cbId) {
+                    iframeRPC(this.#chatIframe, 'response.' + data.cbId, {
+                        type: 'response.' + data.cbId,
+                        data: response
+                    });
+                }
+
+                if (response.status) {
+                    return -1;
+                }
+            }
+
+            this.addEventListener('getchat.webpush.reset', onRequest);
+        }
+
+        return permission;
+    }
+
+    async requestNotificationPermission(e) {
+
+        if (!this.#fcmManager) {
+            throw new Error('FCM manager is not initialized, call initWebPushNotification() first');
+        }
+
+        const response = await this.#fcmManager.loadToken();
+        if (response.status === 'granted' && response.token) {
+            const { status } = await this.rpc('getchat.messenger.fcm_token.register', { token: response.token });
+            if (status === true) {
+                const { id } = await this.rpc('getchat.messenger.actor.getId');
+                if (id) {
+                    const keyPath = `getchat.messenger.user.${id}.fcm_token`;
+                    const prevToken = localStorage.getItem(keyPath);
+
+                    if (prevToken && prevToken !== response.token) {
+                        localStorage.setItem(`getchat.messenger.user.${id}.fcm_token`, response.token);
+                    }
+                }
+
+                response.persisted = true;
+            }
+        }
+
+        return response;
+    }
     }
 }

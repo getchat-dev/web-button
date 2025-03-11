@@ -58,6 +58,12 @@ export interface ChatOptions {
     onAfterCloseChat?: () => Promise<void> | void;;
 }
 
+export type NotificationPermissionResult = {
+    status: "granted" | "denied" | "default" | "unsupported";
+    token: string | null;
+    persisted?: boolean;
+};
+
 export declare class Chat {
     constructor(options: ChatOptions);
 
@@ -84,4 +90,6 @@ export declare class Chat {
     getChatIframeNode(): HTMLElement | null;
 
     rpc(method: string, params: any[], timeout?: number): Promise<any>;
+
+    initWebPushNotifications(): Promise<NotificationPermissionResult>;
 }
