@@ -92,4 +92,8 @@ export declare class Chat {
     rpc(method: string, params: any[], timeout?: number): Promise<any>;
 
     initWebPushNotifications(): Promise<NotificationPermissionResult>;
+
+    requestNotificationPermission(event?: MouseEvent | PointerEvent): Promise<NotificationPermissionResult>;
+
+    disableNotifications(): Promise<boolean>;
 }

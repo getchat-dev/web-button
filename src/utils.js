@@ -484,6 +484,20 @@ const cssTransitionBasedAnimate = function(node, beforeClass, animationClass) {
     });
 };
 
+const safeJSONParse = function (str) {
+    if (typeof (str) !== 'string') {
+        return str;
+    }
+
+    try {
+        return JSON.parse(str);
+    }
+    catch (e) {
+        console.error('Error parsing JSON string:', e);
+        return null;
+    }
+}
+
 function isSafari() {
     const ua = navigator.userAgent;
     const isSafariBrowser =
@@ -549,6 +563,7 @@ export {
     isSafari,
     isMobileScreen,
     isTouchDevice,
+    safeJSONParse,
     transitionEnd,
     compartmentalizeCssValue,
     sanitizeOnMessageEvent,

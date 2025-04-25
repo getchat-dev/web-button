@@ -1,6 +1,6 @@
 {
   "name": "@getchat-dev/web-button",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "homepage": "https://github.com/getchat-dev/web-button?tab=readme-ov-file#terms",
   "bugs": "https://github.com/getchat-dev/web-button/issues",
@@ -20,9 +20,9 @@
   },
   "devDependencies": {
     "@rollup/plugin-replace": "^6.0.2",
-    "lightningcss": "^1.29.1",
-    "typescript": "^5.7.3",
-    "vite": "^6.1.1",
+    "lightningcss": "^1.29.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3",
     "vite-plugin-css-injected-by-js": "^3.5.2"
   },
   "keywords": [
@@ -44,6 +44,6 @@
   "author": "Evgeniy Tyurin",
   "license": "MIT",
   "dependencies": {
-    "firebase": "^11.3.1"
+    "firebase": "^11.6.1"
   }
 }

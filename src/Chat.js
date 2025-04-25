@@ -1,4 +1,4 @@
-import { cssTransitionBasedAnimate, removeClassName, iframeRPC } from '@/utils.js'
+import { safeJSONParse, cssTransitionBasedAnimate, removeClassName, iframeRPC } from '@/utils.js'
 import { startObservViewport, finishObservViewport } from '@/viewportObserver';
 import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
@@ -7,6 +7,9 @@ import escapeHandler from '@/escapeHandler';
 import fcmManager from '@/fcm';
 
 import styles from '@/outer.module.css';
+
+const FCM_TOKEN_STORAGE_KEY = '`getchat.webpush.fcm_token`';
+const WEBPUSH_DISABLED_STORAGE_KEY = 'getchat.webpush.disabled';
 
 export default class Chat {
 
@@ -33,6 +36,7 @@ export default class Chat {
 
     #fcmManager;
     #requestNotificationPermission;
+    #unsibscribePushMessage;
 
     constructor({ id, url, button, closeOnEscape = true, autoload, autoopen = false, autoopenDelay, onBeforeEmbedChat, onChatLoaded, onBeforeOpen, onAfterOpen, onBeforeClose, onAfterClose }) {
         this.#chatUrl = url;
@@ -42,7 +46,7 @@ export default class Chat {
             this.#button = button;
         }
 
-        if(typeof onBeforeEmbedChat !== 'function') {
+        if (typeof onBeforeEmbedChat !== 'function') {
             throw new Error('onBeforeEmbedChat parameter must be a function, ' + typeof onBeforeEmbedChat + ' given');
         }
         this.#onBeforeEmbedChat = onBeforeEmbedChat;
@@ -233,7 +237,7 @@ export default class Chat {
                     escapeHandler.bind(this.close);
                 }
             }
-            catch(e) {
+            catch (e) {
                 reject(e);
             }
 
@@ -290,7 +294,7 @@ export default class Chat {
 
                 resolve();
             }
-            catch(e) {
+            catch (e) {
                 reject(e);
             }
         });
@@ -409,13 +413,26 @@ export default class Chat {
 
         // this.#fcmManager = module.default(fcmConfig, vapidKey);
         this.#fcmManager = new fcmManager(fcmConfig, vapidKey);
-        const permission = await this.#fcmManager.getNotificationPermissionAndToken();
+        const permission = localStorage.getItem(WEBPUSH_DISABLED_STORAGE_KEY) === 'true' ? { status: this.#fcmManager.getNotificationPermission(), token: null } : await this.#fcmManager.getNotificationPermissionAndToken();
 
+        if(permission.token) {
+            const { id: userId } = await this.rpc('getchat.messenger.actor.getId');
+            const prevTokenData = safeJSONParse(localStorage.getItem(FCM_TOKEN_STORAGE_KEY));
+            // in case when the token wasn't changed but the user was changed
+            if(prevTokenData?.token == permission.token && prevTokenData?.userId !== userId) {
+                if(await this.#fcmManager.deleteToken()) {
+                    permission.token = null;
+                    localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+                }
+            }
+        }
+
+        // let's know getchat about the permission status
         this.rpc('getchat.messenger.webpush.permission.set', permission);
 
-        if (permission.status === 'default') {
+        if (permission.status !== 'denied') {
 
-            const onRequest = async (e, data) => {
+            const requestPushNotificationsHandler = async (e, data) => {
 
                 const response = {
                     status: false
@@ -445,18 +462,14 @@ export default class Chat {
                 }
             }
 
-            this.addEventListener('getchat.webpush.request', onRequest);
-        }
-        else if (permission.status === 'granted') {
-
-            const onRequest = async (e, data) => {
+            const disablePushNotificationsHandler = async (e, data) => {
 
                 const response = {
                     status: true
                 };
 
                 try {
-                    await this.resetNotificationData();
+                    await this.disableNotifications();
                 }
                 catch (e) {
                     response.error = e.message;
@@ -474,7 +487,12 @@ export default class Chat {
                 }
             }
 
-            this.addEventListener('getchat.webpush.reset', onRequest);
+            this.addEventListener('getchat.webpush.request', requestPushNotificationsHandler);
+            this.addEventListener('getchat.webpush.reset', disablePushNotificationsHandler);
+
+            if(permission.status === 'granted' && permission.token) {
+                this.#activateOnPushMessage();
+            }
         }
 
         return permission;
@@ -486,19 +504,46 @@ export default class Chat {
             throw new Error('FCM manager is not initialized, call initWebPushNotification() first');
         }
 
-        const response = await this.#fcmManager.loadToken();
+        let response = await this.#fcmManager.loadToken();
+
+        if (! (response.status === 'granted' && response.token)) {
+            // just in case set the permission status to getchat
+            this.rpc('getchat.messenger.webpush.permission.set', response);
+
+            return response;
+        }
+
+        const { id: userId } = await this.rpc('getchat.messenger.actor.getId');
+        const prevTokenData = safeJSONParse(localStorage.getItem(FCM_TOKEN_STORAGE_KEY));
+        // in case when the token wasn't changed
+        if(prevTokenData?.token == response.token) {
+            // but the user was changed
+            if(prevTokenData?.userId !== userId) {
+                await this.#fcmManager.deleteToken();
+                localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+
+                response = await this.#fcmManager.loadToken();
+            }
+            // the user is the same
+            else {
+                this.rpc('getchat.messenger.webpush.permission.set', response);
+
+                return response;
+            }
+        }
+
+        this.rpc('getchat.messenger.webpush.permission.set', response);
+
         if (response.status === 'granted' && response.token) {
+
+            localStorage.removeItem(WEBPUSH_DISABLED_STORAGE_KEY);
+
             const { status } = await this.rpc('getchat.messenger.fcm_token.register', { token: response.token });
             if (status === true) {
-                const { id } = await this.rpc('getchat.messenger.actor.getId');
-                if (id) {
-                    const keyPath = `getchat.messenger.user.${id}.fcm_token`;
-                    const prevToken = localStorage.getItem(keyPath);
-
-                    if (prevToken && prevToken !== response.token) {
-                        localStorage.setItem(`getchat.messenger.user.${id}.fcm_token`, response.token);
-                    }
-                }
+                localStorage.setItem(FCM_TOKEN_STORAGE_KEY, JSON.stringify({token: response.token, userId}));
+                // just in case try to remove the old listener
+                this.#deactivateOnPushMessage();
+                this.#activateOnPushMessage();
 
                 response.persisted = true;
             }
@@ -506,5 +551,69 @@ export default class Chat {
 
         return response;
     }
+
+    /**
+   * Attempts to clear notification-related data
+   * Note: This doesn't directly revoke permission, but can help reset the state
+   */
+    async disableNotifications() {
+        if (! this.#fcmManager) {
+            throw new Error('FCM manager is not initialized, call initWebPushNotification() first');
+        }
+
+        const response = await this.#fcmManager.deleteToken();
+        if (response.status === true) {
+            // update the permission status
+            this.rpc('getchat.messenger.webpush.permission.set', {status: this.#fcmManager.getNotificationPermission(), token: null});
+            localStorage.setItem(WEBPUSH_DISABLED_STORAGE_KEY, 'true');
+            localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+
+            this.#deactivateOnPushMessage();
+        }
+
+        return response;
+    }
+
+    async #activateOnPushMessage() {
+        if (this.#fcmManager) {
+            const unsubscribe = await this.#fcmManager.onMessage((payload) => {
+
+                console.log(
+                    "Received new foreground push message ",
+                    payload
+                );
+
+                const link = payload.fcmOptions?.link || payload.data?.link;
+
+                const notificationTitle = payload.data.title;
+                const notificationOptions = {
+                    body: payload.data.body,
+                    icon: payload.data?.icon ?? null,
+                    image: payload.data.image ?? null,
+                    data: { url: link },
+                };
+
+                // show notification
+                const notification = new Notification(notificationTitle, notificationOptions);
+                notification.onclick = (event) => {
+                    event.preventDefault(); // Prevent the browser from focusing the Notification's tab
+                    if (link) {
+                        window.open(link, '_blank');
+                    }
+                };
+
+            });
+
+            if(unsubscribe) {
+                this.#unsibscribePushMessage = unsubscribe;
+            }
+        }
+    }
+
+    #deactivateOnPushMessage() {
+        if (this.#unsibscribePushMessage) {
+            this.#unsibscribePushMessage();
+            this.#unsibscribePushMessage = null;
+        }
     }
 }

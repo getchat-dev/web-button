@@ -249,6 +249,33 @@ if (status === "default") {
 }
 ```
 
+#### Example: Disable Push Notifications
+
+```typescript
+await chat.whenReady();
+// This must be called after the chat is fully initialized.
+const { status, token } = await chat.initWebPushNotification();
+
+if (status === "granted" && token) {
+    const button = document.querySelector<HTMLButtonElement>('button[data-action="disable-webpush"]');
+    if (button) {
+        button.addEventListener("click", async (e: MouseEvent) => {
+            e.preventDefault();
+
+            try {
+                const status: Boolean = await chat.disableNotifications();
+                if (status) {
+                    console.log("FCM Token deleted successfully");
+                }
+            }
+            catch (error) {
+                console.error("Failed to disable notifications:", error);
+            }
+        });
+    }
+}
+```
+
 
 ### Handling Chat Events
 
@@ -359,6 +386,8 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | `getChatIframeNode` | N/A                                                | `HTMLElement \| null`       | Retrieves the chat's iframe element, if using an iframe.      |
 | `rpc`               | `method: string, params: any[], timeout?: number`  | `Promise<any>`              | Performs a remote procedure call to the chat service.         |
 | `initWebPushNotifications` | N/A                                        | `Promise<{ status: "granted" \| "denied" \| "default" \| "unsupported", token: string \| null }>` | Initializes web push notifications, retrieves FCM configuration, and manages notification permissions. |
+| `requestNotificationPermission` | `event?: MouseEvent`                | `Promise<NotificationPermissionResult>` | Requests notification permission from the user.               |
+| `disableNotifications` | N/A                                          | `Promise<boolean>`          | Disables web push notifications.                              |
 
 ### GetChatButton Class
 
