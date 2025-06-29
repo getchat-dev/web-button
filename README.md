@@ -368,6 +368,11 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | `onBeforeClose`     | `() => void`                    | N/A     | Callback before the chat is closed.                          |
 | `onAfterCloseChat`  | `() => void`                    | N/A     | Callback after the chat is closed.                           |
 
+### InitWebPushNotificationsOptions Interface
+| Property                | Type                            | Default | Description                                                  |
+|-------------------------|---------------------------------|---------|--------------------------------------------------------------|
+| `onNotificationClicked` | `(event: NotificationEvent) => void` | N/A     | Callback function to call when a user clicks on a notification and existing window is focused. |
+
 ### Chat Class
 
 | Method              | Parameters                                         | Returns                     | Description                                                   |
@@ -385,7 +390,7 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | `getChatNode`       | N/A                                                | `HTMLElement \| null`       | Retrieves the chat container element.                         |
 | `getChatIframeNode` | N/A                                                | `HTMLElement \| null`       | Retrieves the chat's iframe element, if using an iframe.      |
 | `rpc`               | `method: string, params: any[], timeout?: number`  | `Promise<any>`              | Performs a remote procedure call to the chat service.         |
-| `initWebPushNotifications` | N/A                                        | `Promise<{ status: "granted" \| "denied" \| "default" \| "unsupported", token: string \| null }>` | Initializes web push notifications, retrieves FCM configuration, and manages notification permissions. |
+| `initWebPushNotifications` | `options: InitWebPushNotificationsOptions`                                        | `Promise<{ status: "granted" \| "denied" \| "default" \| "unsupported", token: string \| null }>` | Initializes web push notifications, retrieves FCM configuration, and manages notification permissions. |
 | `requestNotificationPermission` | `event?: MouseEvent`                | `Promise<NotificationPermissionResult>` | Requests notification permission from the user.               |
 | `disableNotifications` | N/A                                          | `Promise<boolean>`          | Disables web push notifications.                              |
 

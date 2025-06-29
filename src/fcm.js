@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getMessaging, getToken, isSupported, onMessage, deleteToken } from "firebase/messaging";
+import { getMessaging, getToken, isSupported, deleteToken } from "firebase/messaging";
 
 let _messaging;
 
@@ -192,24 +192,6 @@ class FcmTokenManager {
         this.#isLoading = false;
 
         return response;
-    }
-
-    async onMessage(handler) {
-        if(this.#token) {
-            const fcmMessaging = await messaging(this.#fcmConfig);
-            if(fcmMessaging) {
-                return onMessage(fcmMessaging, (payload) => {
-                    try {
-                        handler(payload);
-                    } catch (handlerError) {
-                        console.error("Error in onMessage handler:", handlerError);
-                        return true;
-                    }
-                });
-            }
-        }
-
-        return null;
     }
 
     /**

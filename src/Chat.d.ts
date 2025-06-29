@@ -64,6 +64,10 @@ export type NotificationPermissionResult = {
     persisted?: boolean;
 };
 
+export type InitWebPushNotificationsOptions = {
+    onNotificationClicked?: (event: NotificationEvent) => void;
+}
+
 export declare class Chat {
     constructor(options: ChatOptions);
 
@@ -91,7 +95,7 @@ export declare class Chat {
 
     rpc(method: string, params: any[], timeout?: number): Promise<any>;
 
-    initWebPushNotifications(): Promise<NotificationPermissionResult>;
+    initWebPushNotifications(options?: InitWebPushNotificationsOptions): Promise<NotificationPermissionResult>;
 
     requestNotificationPermission(event?: MouseEvent | PointerEvent): Promise<NotificationPermissionResult>;
 

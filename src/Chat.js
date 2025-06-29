@@ -359,6 +359,8 @@ export default class Chat {
      *
      * @async
      * @function initWebPushNotification
+     * @param {Object} [options] - Optional parameters.
+     * @param {Function} [options.onNotificationClicked] - Callback function to call when a user clicks on a notification and existing window is focused.
      *
      * @returns {Promise<{ status: "granted" | "denied" | "default" | "unsupported", token: string | null }>}
      * - `status`: `"granted"` if notifications are allowed, `"denied"` if blocked, `"default"` if undecided, `"unsupported"` if the browser does not support notifications.
@@ -392,7 +394,7 @@ export default class Chat {
      *   console.error('Failed to initialize web push notifications:', error);
      * }
      */
-    async initWebPushNotification() {
+    async initWebPushNotification({onNotificationClicked = null} = {}) {
         // const module = await import('@/fcm.js');
         // if(! module) {
         //     throw new Error('Failed to load fcm.js');
@@ -418,8 +420,19 @@ export default class Chat {
         if(permission.token) {
             const { id: userId } = await this.rpc('getchat.messenger.actor.getId');
             const prevTokenData = safeJSONParse(localStorage.getItem(FCM_TOKEN_STORAGE_KEY));
+
+            // this is the case when the token was changed, but, i faced with safari for macos and ios
+            // here is github thread that some user faced when safari can change the token spontaneously
+            // https://github.com/firebase/firebase-js-sdk/issues/8010
+            // maybe it is a bug in safari https://bugs.webkit.org/show_bug.cgi?id=279277
+            if(! prevTokenData || (prevTokenData?.token != permission.token && prevTokenData?.userId == userId)) {
+                // we need to save new token to getchat
+                if(await this.#putTokenToGetchat(permission.token)) {
+                    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, JSON.stringify({token: permission.token, userId}));
+                }
+            }
             // in case when the token wasn't changed but the user was changed
-            if(prevTokenData?.token == permission.token && prevTokenData?.userId !== userId) {
+            else if(prevTokenData?.token == permission.token && prevTokenData?.userId !== userId) {
                 if(await this.#fcmManager.deleteToken()) {
                     permission.token = null;
                     localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
@@ -490,8 +503,15 @@ export default class Chat {
             this.addEventListener('getchat.webpush.request', requestPushNotificationsHandler);
             this.addEventListener('getchat.webpush.reset', disablePushNotificationsHandler);
 
-            if(permission.status === 'granted' && permission.token) {
-                this.#activateOnPushMessage();
+            if(typeof onNotificationClicked === 'function') {
+                console.info('onNotificationClicked was passed', onNotificationClicked);
+
+                navigator.serviceWorker.addEventListener('message', (e) => {
+                    if (e.data?.type === 'notification-clicked') {
+                        console.info('notification-clicked AAAAA', e.data);
+                        onNotificationClicked(e.data);
+                    }
+                });
             }
         }
 
@@ -538,13 +558,8 @@ export default class Chat {
 
             localStorage.removeItem(WEBPUSH_DISABLED_STORAGE_KEY);
 
-            const { status } = await this.rpc('getchat.messenger.fcm_token.register', { token: response.token });
-            if (status === true) {
+            if (await this.#putTokenToGetchat(response.token)) {
                 localStorage.setItem(FCM_TOKEN_STORAGE_KEY, JSON.stringify({token: response.token, userId}));
-                // just in case try to remove the old listener
-                this.#deactivateOnPushMessage();
-                this.#activateOnPushMessage();
-
                 response.persisted = true;
             }
         }
@@ -553,67 +568,29 @@ export default class Chat {
     }
 
     /**
-   * Attempts to clear notification-related data
-   * Note: This doesn't directly revoke permission, but can help reset the state
-   */
+     * Attempts to clear notification-related data
+     * Note: This doesn't directly revoke permission, but can help reset the state
+     */
     async disableNotifications() {
         if (! this.#fcmManager) {
             throw new Error('FCM manager is not initialized, call initWebPushNotification() first');
         }
 
-        const response = await this.#fcmManager.deleteToken();
-        if (response.status === true) {
+        const status = await this.#fcmManager.deleteToken();
+
+        if (status) {
             // update the permission status
             this.rpc('getchat.messenger.webpush.permission.set', {status: this.#fcmManager.getNotificationPermission(), token: null});
             localStorage.setItem(WEBPUSH_DISABLED_STORAGE_KEY, 'true');
             localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
-
-            this.#deactivateOnPushMessage();
         }
 
-        return response;
+        return status;
     }
 
-    async #activateOnPushMessage() {
-        if (this.#fcmManager) {
-            const unsubscribe = await this.#fcmManager.onMessage((payload) => {
+    async #putTokenToGetchat(token) {
+        const { status } = await this.rpc('getchat.messenger.fcm_token.register', { token });
 
-                console.log(
-                    "Received new foreground push message ",
-                    payload
-                );
-
-                const link = payload.fcmOptions?.link || payload.data?.link;
-
-                const notificationTitle = payload.data.title;
-                const notificationOptions = {
-                    body: payload.data.body,
-                    icon: payload.data?.icon ?? null,
-                    image: payload.data.image ?? null,
-                    data: { url: link },
-                };
-
-                // show notification
-                const notification = new Notification(notificationTitle, notificationOptions);
-                notification.onclick = (event) => {
-                    event.preventDefault(); // Prevent the browser from focusing the Notification's tab
-                    if (link) {
-                        window.open(link, '_blank');
-                    }
-                };
-
-            });
-
-            if(unsubscribe) {
-                this.#unsibscribePushMessage = unsubscribe;
-            }
-        }
-    }
-
-    #deactivateOnPushMessage() {
-        if (this.#unsibscribePushMessage) {
-            this.#unsibscribePushMessage();
-            this.#unsibscribePushMessage = null;
-        }
+        return status ?? false;
     }
 }
