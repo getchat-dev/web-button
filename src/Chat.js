@@ -1,95 +1,72 @@
-import { safeJSONParse, cssTransitionBasedAnimate, removeClassName, iframeRPC } from '@/utils.js'
-import { startObservViewport, finishObservViewport } from '@/viewportObserver';
+import { safeJSONParse, iframeRPC, singletonPromise } from '@/utils.js'
+import { startObservViewport } from '@/viewportObserver';
 import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
-import escapeHandler from '@/escapeHandler';
 
 import fcmManager from '@/fcm';
-
-import styles from '@/outer.module.css';
 
 const FCM_TOKEN_STORAGE_KEY = '`getchat.webpush.fcm_token`';
 const WEBPUSH_DISABLED_STORAGE_KEY = 'getchat.webpush.disabled';
 
 export default class Chat {
 
-    #button;
     #chatNode;
+    #chatNodeStyle = {}; // accepts only if $chatNode is passed and is valid
     #chatIframe;
     #chatUrl;
 
-    #closeOnEscape = true;
+    #loadingState = 0; // there are 4 states: -1 - loading error, 0 - initial state, 1 - loading, 2 - loaded
+    #loadingError;
 
-    #isChatLoaded = -1;
-    #isChatOpened = false;
-    #animationState = false;
-
-    #onBeforeEmbedChat;
     #onChatLoadedCallback;
-
-    #onBeforeOpen;
-    #onAfterOpen;
-    #onBeforeClose;
-    #onAfterClose;
+    #onBeforeChatLoad;
 
     #readyPromise;
 
     #fcmManager;
-    #requestNotificationPermission;
-    #unsibscribePushMessage;
 
-    constructor({ id, url, button, closeOnEscape = true, autoload, autoopen = false, autoopenDelay, onBeforeEmbedChat, onChatLoaded, onBeforeOpen, onAfterOpen, onBeforeClose, onAfterClose }) {
+    constructor({ id, url, node, nodeStyle, onBeforeChatLoad, onLoaded, handleKeyboardOnTouchDevices = true }) {
+
+        if(! node) {
+            throw new Error('node parameter is required');
+        }
+        // assume that if node is a string, it is a DOM selector
+        if(typeof node === 'string') {
+            node = document.querySelector(node);
+        }
+
+        if(!(node instanceof HTMLElement)) {
+            throw new Error('node parameter must be an HTMLElement instance');
+        }
+
+        this.#chatNode = node;
+        this.#chatNodeStyle = nodeStyle;
+
+        if(! url && ! (node instanceof HTMLIFrameElement && node.src)) {
+            throw new Error('url parameter is required or node parameter must be an iframe element with src attribute');
+        }
+
         this.#chatUrl = url;
-        this.#closeOnEscape = closeOnEscape;
 
-        if (button instanceof Element) {
-            this.#button = button;
-        }
-
-        if (typeof onBeforeEmbedChat !== 'function') {
-            throw new Error('onBeforeEmbedChat parameter must be a function, ' + typeof onBeforeEmbedChat + ' given');
-        }
-        this.#onBeforeEmbedChat = onBeforeEmbedChat;
-
-        let onload;
-        if (autoopen) {
-            if (autoopen !== 'once' || !window.localStorage.getItem(`getchat_opened`)) {
-                onload =
-                    !isNaN(autoopenDelay)
-                        ? () => {
-                            setTimeout(this.open, autoopenDelay * 1000);
-                        }
-                        : this.open
-                    ;
-            }
+        if(typeof onBeforeChatLoad === 'function') {
+            this.#onBeforeChatLoad = onBeforeChatLoad;
         }
 
         this.#onChatLoadedCallback = () => {
-            this.#isChatLoaded = 1;
-            onload && onload();
+            this.#loadingState = 2;
 
-            if (typeof onChatLoaded === 'function') {
-                onChatLoaded();
+            if (typeof onLoaded === 'function') {
+                onLoaded(this.#chatIframe);
             }
 
-            this.#onBeforeEmbedChat = null;
+            if(handleKeyboardOnTouchDevices === true) {
+                startObservViewport(this.#chatNode);
+            }
+
             this.#onChatLoadedCallback = null;
         }
 
-        if (autoload) {
-            this.load(false);
-        }
-
-        this.#onBeforeOpen = onBeforeOpen;
-        this.#onAfterOpen = onAfterOpen;
-        this.#onBeforeClose = onBeforeClose;
-        this.#onAfterClose = onAfterClose;
-
-        if (this.#button) {
-            this.#button.addEventListener('click', () => {
-                this.toggle();
-            });
-        }
+        this.load = singletonPromise(this.#load.bind(this));
 
         {
             let resolve, reject;
@@ -99,13 +76,6 @@ export default class Chat {
             });
 
             this.#readyPromise = { promise, resolve, reject };
-
-            if (this.#button) {
-                promise.then(async () => {
-                    const unreads = await this.rpc('getchat.messenger.getUnreads');
-                    this.#button.setBadge(unreads?.total?.messages ?? 0);
-                });
-            }
         }
     }
 
@@ -114,190 +84,20 @@ export default class Chat {
             return this.#readyPromise.promise;
         }
 
-        if (this.#isChatLoaded === 1) {
-            return Promise.resolve();
+        let status = false;
+        if (this.#loadingState === 2) {
+            status = true;
         }
 
-        return new Promise();
+        return Promise.resolve(status);
     }
 
-    load(showLoader = true) {
-        return new Promise((resolve, reject) => {
-            try {
-                if (this.#isChatLoaded > -1) {
-                    resolve();
-                    return;
-                }
-
-                this.#isChatLoaded = 0;
-
-                const chatNode = this.#onBeforeEmbedChat();
-                if (!(chatNode instanceof Element)) {
-                    throw new Error('onBeforeEmbedChat must return an Element');
-                }
-
-                this.#chatNode = chatNode;
-
-                if (showLoader) {
-                    this.#button?.setState('loading');
-                }
-
-                this.#chatIframe = embedChat(chatNode, this.#chatUrl, {}, () => {
-                    this.#onChatLoadedCallback();
-                    this.#button?.setState('loaded');
-
-                    this.#isChatLoaded = 1;
-
-                    resolve();
-
-                    this.#readyPromise?.resolve();
-                    this.#readyPromise = null;
-                });
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
+    get loadingState() {
+        return this.#loadingState;
     }
 
     isLoaded() {
-        return this.#isChatLoaded === 1;
-    }
-
-    isOpened() {
-        return this.#isChatOpened;
-    }
-
-    toggle() {
-        return new Promise(async (resolve, reject) => {
-
-            if (this.#isChatLoaded === 0) {
-                resolve();
-                return;
-            }
-
-            if (this.#isChatOpened) {
-                await this.close();
-            }
-            else {
-                await this.open();
-            }
-
-            resolve();
-        });
-    }
-
-    open = () => {
-        return new Promise(async (resolve, reject) => {
-
-            if (this.#isChatLoaded < 1) {
-                await this.load();
-            }
-
-            if (this.#isChatOpened && !this.#animationState) {
-                resolve();
-                return;
-            }
-
-            try {
-                this.#animationState = true;
-
-                if (typeof (this.#onBeforeOpen) === 'function') {
-                    await this.#onBeforeOpen();
-                }
-
-                if (this.#button) {
-                    await cssTransitionBasedAnimate(
-                        this.#button,
-                        styles['button-animation-preclose'],
-                        styles['button-animation-close'],
-                    );
-                }
-
-                await cssTransitionBasedAnimate(
-                    this.#chatNode,
-                    styles['chat-animation-preopen'],
-                    styles['chat-animation-opened']
-                );
-
-                if (typeof (this.#onAfterOpen) === 'function') {
-                    await this.#onAfterOpen();
-                }
-
-                iframeRPC(this.#chatIframe, 'getchat.messenger.repaint');
-
-                startObservViewport(this.#chatNode);
-
-                this.#animationState = false;
-                this.#isChatOpened = true;
-
-                iframeRPC(this.#chatIframe, 'getchat.chat.input.focus');
-
-                if (this.#closeOnEscape) {
-                    escapeHandler.bind(this.close);
-                }
-            }
-            catch (e) {
-                reject(e);
-            }
-
-            resolve();
-        });
-    }
-
-    close = () => {
-        return new Promise(async (resolve, reject) => {
-
-            if (!this.#isChatOpened && !this.#animationState) {
-                resolve();
-                return;
-            }
-
-            if (this.#closeOnEscape) {
-                escapeHandler.unbind(this.close);
-            }
-
-            try {
-                this.#animationState = true;
-
-                finishObservViewport(this.#chatNode);
-
-                if (typeof (this.#onBeforeClose) === 'function') {
-                    await this.#onBeforeClose();
-                }
-
-                await cssTransitionBasedAnimate(
-                    this.#chatNode,
-                    styles['chat-animation-opened'],
-                    styles['chat-animation-close']
-                );
-
-                removeClassName(this.#chatNode, styles['chat-animation-close']);
-                removeClassName(this.#button, styles['button-animation-close']);
-
-                if (this.#button) {
-                    await cssTransitionBasedAnimate(
-                        this.#button,
-                        styles['button-animation-preopen'],
-                        styles['button-animation-open'],
-                    );
-                }
-
-                removeClassName(this.#button, styles['button-animation-open']);
-
-                this.#animationState = true;
-                this.#isChatOpened = false;
-
-                if (typeof (this.#onAfterClose) === 'function') {
-                    await this.#onAfterClose();
-                }
-
-                resolve();
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
+        return this.#loadingState === 2;
     }
 
     addEventListener(event, listener) {
@@ -308,10 +108,6 @@ export default class Chat {
         });
     }
 
-    getButton() {
-        return this.#button;
-    }
-
     getChatNode() {
         return this.#chatNode;
     }
@@ -320,15 +116,66 @@ export default class Chat {
         return this.#chatIframe;
     }
 
+    async #load(timeout = 5000) {
+        const promise = new Promise((resolve, reject) => {
+            try {
+
+                // if is loaded state
+                if (this.#loadingState === 1) {
+                    resolve();
+                    return;
+                }
+                // if not initial state
+                else if (this.#loadingState !== 0) {
+                    reject(this.#loadingError ?? 'Chat cannot be loaded, current state: ' + this.#loadingState);
+                }
+
+                // set the state to loading
+                this.#loadingState = 1;
+
+                this.#chatIframe = embedChat(
+                    this.#chatNode,
+                    this.#chatUrl,
+                    {
+                        style: this.#chatNodeStyle,
+                        onbeforeload: this.#onBeforeChatLoad,
+                        onready: () => {
+                            this.#onChatLoadedCallback();
+
+                            this.#loadingState = 2;
+
+                            this.#readyPromise?.resolve();
+                            this.#readyPromise = null;
+                        },
+                        onerror: (e) => {
+                            this.#loadingError = e;
+                            this.#loadingState = -1; // -1 means error during loading
+
+                            this.#readyPromise?.resolve();
+                            this.#readyPromise = null;
+                        }
+                    }
+                );
+            }
+            catch (e) {
+                this.#loadingError = e;
+                this.#loadingState = -1; // -2 means error during loading
+                reject(e);
+            }
+        });
+
+        return this.#readyPromise?.promise ?? promise;
+    }
+
     rpc(method, params, timeout = 5000) {
         return new Promise((resolve, reject) => {
-            if (this.#isChatLoaded < 1) {
-                reject('Chat is not loaded');
+            if (this.#loadingState !== 2) {
+                reject(new Error('Chat is not loaded'));
                 return;
             }
 
             if (!this.#chatIframe) {
-                reject('Chat iframe is not loaded');
+                reject(new Error('Chat iframe is not loaded'));
                 return;
             }
 

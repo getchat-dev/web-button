@@ -1,4 +1,6 @@
 import createButton from '@/createButton';
+import deviceDetector from '@/deviceDetector';
+import Chat from '@/Chat';
 
 (function (w) {
 
@@ -8,7 +10,10 @@ import createButton from '@/createButton';
 
     w[__JS_GLOBAL_SCOPE__] = {
         version: process.env.VERSION,
-        createButton
+        deviceDetector,
+        createButton,
+        Messenger: Chat,
+        Chat
     };
 
     const loadFnName = (__JS_GLOBAL_SCOPE__).toLowerCase() + 'onloaded';

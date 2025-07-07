@@ -11,6 +11,11 @@ export interface CreateButtonOptions {
      * Whether to autoload the chat. Default is false.
      */
     autoload?: boolean; // default: false
+
+    /**
+     * If true, it will show a loader on the button while the chat is loading.
+     */
+    autoloadLoader?: boolean; // default: false
     /**
      * Whether to open the chat widget automatically. Default is false.
      */

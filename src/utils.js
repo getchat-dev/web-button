@@ -546,6 +546,25 @@ const animationPreference = function() {
     return preferAnimation;
 }
 
+const singletonPromise = function(fn) {
+    let currentPromise = null;
+
+    return function (...args) {
+        if (!currentPromise) {
+            const tempPromise = fn.apply(this, args);
+            if(! (tempPromise instanceof Promise)) {
+                throw new Error('Function must return a Promise');
+            }
+
+            currentPromise = tempPromise
+                .finally(() => {
+                    currentPromise = null;
+                });
+        }
+        return currentPromise;
+    };
+}
+
 const asyncEmbedIframe = callbackFuncToAsync(embedIframe, 'onload', 'onerror');
 
 export {
@@ -572,5 +591,6 @@ export {
     cssTransitionBasedAnimate,
     iframeRPC,
     asyncEmbedIframe,
-    animationPreference
+    animationPreference,
+    singletonPromise
 }

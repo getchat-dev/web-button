@@ -2,6 +2,12 @@ import Chat from '@/Chat.d.ts';
 
 export type State = 'loaded' | 'loading';
 
+interface setChatInstanceOptions {
+    toggleOnClick?: boolean;
+}
+
+export type GetChatButtonCallback = 'onBeforeOpenChat' | 'onAfterOpenChat' | 'onBeforeCloseChat' | 'onAfterCloseChat';
+
 export declare class GetChatButton extends HTMLElement {
     // Constructor for the class
     constructor();
@@ -11,7 +17,7 @@ export declare class GetChatButton extends HTMLElement {
     disconnectedCallback(): void;
 
     // Getter and setter for the chat instance
-    setChatInstance(chatInstance: Chat): void;
+    setChatInstance(chatInstance: Chat, options: setChatInstanceOptions): void;
     getChatInstance(): Chat;
 
     // Method to set the state
@@ -29,6 +35,36 @@ export declare class GetChatButton extends HTMLElement {
 
     // Render method
     render(): void;
+
+    /**
+     * Registers a callback for getchat button events.
+     *
+     * Supported events:
+     *   - 'onBeforeOpenChat'
+     *   - 'onAfterOpenChat'
+     *   - 'onBeforeCloseChat'
+     *   - 'onAfterCloseChat'
+     *
+     * Callback signature: (chatInstance: Chat) => Promise<void> | void
+     *
+     * @param event - The event name.
+     * @param callback - The callback function.
+     */
+    addCallback(event: GetChatButtonCallback, callback: Function): void;
+
+    // Method to load the chat
+    loadChat(showLoader?: boolean): Promise<void>;
+
+    // Methods to open, close, or toggle the chat
+    toggleChat(): Promise<void>;
+
+    // Method to open the chat
+    openChat(): Promise<void>;
+
+    // Method to close the chat
+    closeChat(): Promise<void>;
+
+    isOpened(): boolean;
 }
 
 // Registration of the custom element

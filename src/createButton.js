@@ -1,4 +1,5 @@
 import { uuid, addClassName, unescapeHTML, compartmentalizeCssValue, isPlainObject, parseClassNames } from '@/utils'
+import escapeHandler from '@/escapeHandler';
 
 import GetchatButton from '@/GetchatButton';
 
@@ -14,6 +15,7 @@ import styles from '@/outer.module.css';
  * @property {string} [className] - The class name to apply to the button.
  * @property {boolean | 'messages' | 'chats'} [showUnread] - Whether to show unread messages or chats count.
  * @property {boolean} [autoload=false] - Whether to autoload the chat. Default is false.
+ * @property {boolean} [autoloadLoader=true] - Whether to show a loader while autoloading the chat. Default is true.
  * @property {boolean} [autoopen=false] - Whether to open the chat widget automatically. Default is false.
  * @property {number} [autoopenDelay=5000] - Delay in milliseconds before auto open. Default is 5000ms.
  * @property {boolean} [closeOnEscape=true] - Whether to close the chat on escape press.
@@ -37,9 +39,10 @@ export default async function ({
     className,
     showUnread = false,
     autoload = false,
+    autoloadLoader = true,
     autoopen = false,
     autoopenDelay = 5,
-    closeOnEscape,
+    closeOnEscape = true,
     color,
     mobileModeMaxWidth = 460,
     insertButtonTo,
@@ -56,9 +59,9 @@ export default async function ({
         insertButtonTo = insertButtonTo();
     };
 
-    if (insertButtonTo instanceof Element) {
+    if (insertButtonTo instanceof HTMLElement) {
         if (!document.body.contains(insertButtonTo)) {
-            throw new Error('insertButtonTo is Element but not yet in DOM, please insert it first');
+            throw new Error('insertButtonTo is HTMLElement but not yet in DOM, please insert it first');
         }
     }
     else {
@@ -88,129 +91,160 @@ export default async function ({
         }
     }
 
-    insertButtonTo.appendChild(button);
+    if(showUnread) {
+        button.setAttribute('data-show-unread', showUnread === true ? 'messages' : showUnread);
+    }
 
     let beforeOpenTopScroll;
     let beforeOpenBodyPositionProperty;
     let thingsForChatMode = false;
 
-    const chat = new Chat({
-        url: unescapeHTML(uri),
-        button,
-        autoload,
-        autoopen,
-        autoopenDelay,
-        closeOnEscape,
-
-        onBeforeEmbedChat: function createChatNode() {
-            let doesElementOnPage = true;
-            if (!(chatNode instanceof Element)) {
-                chatNode = document.createElement('div');
-                doesElementOnPage = false;
-            }
-
-            chatNode.className = styles['chat']
-
-            if (chatClassName) {
-                addClassName(chatNode, parseClassNames(chatClassName));
-            }
-
-            if (isPlainObject(chatStyle)) {
-                Object.assign(chatNode.style, chatStyle);
-            }
-
-            if (!doesElementOnPage || !document.body.contains(chatNode)) {
-                if (!(chatParent instanceof Element)) {
-                    chatParent = document.body;
-                }
-
-                chatParent.appendChild(chatNode);
-            }
-
-            return chatNode;
-        },
-
-        onChatLoaded: function () {
-            // exactly here, on loading and before opening.
-            // set a flag in the session that the chat was opened for us
-            window.localStorage.setItem(`getchat_opened`, '1');
-
-            const wh = window.innerHeight;
-
-            const chatNode = chat.getChatNode();
-            if (chatNode) {
-                let { position, top, bottom } = getComputedStyle(chatNode);
-
-                const newStyle = {}
-
-                requestAnimationFrame(() => {
-                    // if our chat is inside the element with a positional fix.
-                    // we need to calculate the height intelligently
-                    if (position === 'fixed') {
-
-                        bottom = compartmentalizeCssValue(bottom, 'auto');
-                        top = compartmentalizeCssValue(top, 'auto');
-
-                        if (bottom !== 'auto' && bottom?.value) {
-                            if (top === 'auto') {
-                                newStyle.top = bottom.value + bottom.unit;
-                                newStyle.height = 'auto';
-                            }
-                        }
-                        else if(top !== 'auto' && top.value) {
-                            if (bottom === 'auto') {
-                                newStyle.bottom = top.value + top.unit;
-                                newStyle.height = 'auto';
-                            }
-                        }
-                    }
-                    else {
-                        newStyle.height = `${Math.min(wh - 20, 500)}px`;
-                    }
-
-                    Object.assign(chatNode.style, newStyle);
-                });
-            }
-        },
-
-        onBeforeOpen: function () {
-            if (window.innerWidth <= mobileModeMaxWidth) {
-                beforeOpenTopScroll = window.scrollY || window.pageYOffset;
-                beforeOpenBodyPositionProperty = getComputedStyle(document.body).position;
-                thingsForChatMode = true;
-            }
-        },
-
-        onAfterOpen: function () {
-
-            if (thingsForChatMode) {
-                window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                document.body.style.position = 'fixed';
-            }
-        },
-
-        onBeforeClose: function () {
-
-            if (thingsForChatMode) {
-
-                if (beforeOpenBodyPositionProperty) {
-                    document.body.style.position = beforeOpenBodyPositionProperty
-                }
-
-                if (beforeOpenTopScroll) {
-                    window.scrollTo({ top: beforeOpenTopScroll, left: 0, behavior: 'instant' });
-                }
-            }
-
-            thingsForChatMode = false;
-        },
+    button.addCallback('onBeforeOpen', function() {
+        if (window.innerWidth <= mobileModeMaxWidth) {
+            beforeOpenTopScroll = window.scrollY || window.pageYOffset;
+            beforeOpenBodyPositionProperty = getComputedStyle(document.body).position;
+            thingsForChatMode = true;
+        }
     });
 
-    button.setChatInstance(chat);
+    button.addCallback('onAfterOpen', function() {
+        if (thingsForChatMode) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+            document.body.style.position = 'fixed';
+        }
 
-    chat.addEventListener('getchat.close', function (data) {
-        chat.close();
+        if (closeOnEscape === true) {
+            escapeHandler.bind(button.closeChat);
+        }
     });
 
-    return chat;
+    button.addCallback('onAfterClose', function() {
+        if (thingsForChatMode) {
+
+            if (beforeOpenBodyPositionProperty) {
+                document.body.style.position = beforeOpenBodyPositionProperty
+            }
+
+            if (beforeOpenTopScroll) {
+                window.scrollTo({ top: beforeOpenTopScroll, left: 0, behavior: 'instant' });
+            }
+        }
+
+        thingsForChatMode = false;
+
+        if (closeOnEscape) {
+            escapeHandler.unbind(button.closeChat);
+        }
+    });
+
+    const initChat = () => {
+
+        // prepare the chat container
+        let doesElementOnPage = true;
+        if (!(chatNode instanceof HTMLElement)) {
+            chatNode = document.createElement('div');
+            doesElementOnPage = false;
+        }
+
+        chatNode.className = styles['chat']
+
+        if (chatClassName) {
+            addClassName(chatNode, parseClassNames(chatClassName));
+        }
+
+        if (isPlainObject(chatStyle)) {
+            Object.assign(chatNode.style, chatStyle);
+        }
+
+        if (!doesElementOnPage || !document.body.contains(chatNode)) {
+            if (!(chatParent instanceof HTMLElement)) {
+                chatParent = document.body;
+            }
+
+            chatParent.appendChild(chatNode);
+        }
+        // end prepare the chat container
+
+        const chat = new Chat({
+            url: unescapeHTML(uri),
+            node: chatNode,
+            handleKeyboardOnTouchDevices: false,
+
+            onLoaded: function () {
+                // exactly here, on loading and before opening.
+                // set a flag in the session that the chat was opened for us
+                window.localStorage.setItem(`getchat_opened`, '1');
+
+                button.setState('loaded');
+
+                const wh = window.innerHeight;
+
+                const chatNode = chat.getChatNode();
+                if (chatNode) {
+                    let { position, top, bottom } = getComputedStyle(chatNode);
+
+                    const newStyle = {}
+
+                    requestAnimationFrame(() => {
+                        // if our chat is inside the element with a positional fix.
+                        // we need to calculate the height intelligently
+                        if (position === 'fixed') {
+
+                            bottom = compartmentalizeCssValue(bottom, 'auto');
+                            top = compartmentalizeCssValue(top, 'auto');
+
+                            if (bottom !== 'auto' && bottom?.value) {
+                                if (top === 'auto') {
+                                    newStyle.top = bottom.value + bottom.unit;
+                                    newStyle.height = 'auto';
+                                }
+                            }
+                            else if(top !== 'auto' && top.value) {
+                                if (bottom === 'auto') {
+                                    newStyle.bottom = top.value + top.unit;
+                                    newStyle.height = 'auto';
+                                }
+                            }
+                        }
+                        else {
+                            newStyle.height = `${Math.min(wh - 20, 500)}px`;
+                        }
+
+                        Object.assign(chatNode.style, newStyle);
+                    });
+                }
+
+                if (autoopen) {
+                    if (autoopen !== 'once' || !window.localStorage.getItem(`getchat_opened`)) {
+                        !isNaN(autoopenDelay)
+                            ? setTimeout(button.openChat, autoopenDelay * 1000)
+                            : button.openChat()
+                        ;
+                    }
+                }
+            },
+        });
+
+        button.setChatInstance(chat);
+        button.loadChat(autoloadLoader);
+
+        chat.addEventListener('getchat.close', function (data) {
+            button.closeChat();
+        });
+
+        return chat;
+    }
+
+    // initializing the chat instance
+    if(autoload) {
+        initChat();
+    }
+    else {
+        button.addEventListener('click', initChat, {once: true});
+    }
+
+    // adding the button to the DOM
+    insertButtonTo.appendChild(button);
+
+    return button;
 }

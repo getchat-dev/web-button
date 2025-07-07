@@ -1,5 +1,8 @@
-import { addClassName, getAttr, removeClassName, toDecimal, dispatchEvent } from "@/utils";
-import Chat from "@/Chat";
+import { addClassName, getAttr, removeClassName, toDecimal, cssTransitionBasedAnimate, singletonPromise, dispatchEvent } from '@/utils';
+import { startObservViewport, finishObservViewport } from '@/viewportObserver';
+import Chat from '@/Chat';
+
+import styles from '@/outer.module.css';
 
 const transformAttributeToCss = function (node, attrbite, type) {
     let value = getAttr(node, attrbite, type);
@@ -50,6 +53,7 @@ const validateUrl = function (url) {
     return false;
 }
 
+const registeredCallbacks = ['onBeforeOpen', 'onAfterOpen', 'onBeforeClose', 'onAfterClose'];
 export default class GetchatButton extends HTMLElement {
 
     #chatInstance;
@@ -57,10 +61,20 @@ export default class GetchatButton extends HTMLElement {
     #observer;
     #icon = defaultIcon;
 
+    #isChatOpened = false;
+    #animationState = false;
+
+    #callbacks = {};
+
     constructor() {
         super();
 
         this.attachShadow({ mode: 'open' });
+
+        this.loadChat = singletonPromise(this.#loadChat.bind(this));
+        this.toggleChat = singletonPromise(this.#toggleChat.bind(this));
+        this.openChat = singletonPromise(this.#openChat.bind(this));
+        this.closeChat = singletonPromise(this.#closeChat.bind(this));
     }
 
     connectedCallback() {
@@ -96,14 +110,42 @@ export default class GetchatButton extends HTMLElement {
         this.#observer.disconnect();
     }
 
-    setChatInstance(chatInstance) {
-        if (!this.#chatInstance && chatInstance instanceof Chat) {
-            this.#chatInstance = chatInstance;
+    setChatInstance(chatInstance, {toggleOnClick = true} = {}) {
+        if(this.#chatInstance) {
+            console.error('Chat instance is already set. Use getChatInstance() to access it.');
+            return;
+        }
+        if(! (chatInstance instanceof Chat)) {
+            console.error('Invalid chat instance provided. It must be an instance of Chat class.');
+            return;
+        }
+
+        this.#chatInstance = chatInstance;
+        this.#chatInstance.whenReady().then(() => {
+            const unread = getAttr(this, 'data-show-unread', 'string');
+            if(unread && ['chats', 'messages'].includes(unread)) {
+                this.#chatInstance.rpc('getchat.messenger.getUnreads').then(unreads => {
+                    this.setBadge(unreads?.total?.[unread] ?? 0);
+                });
+            }
+        });
+
+        if (toggleOnClick) {
+            this.addEventListener('click', this.toggleChat);
         }
     }
 
     getChatInstance() {
         return this.#chatInstance;
+    }
+
+    addCallback(name, callback) {
+        if (registeredCallbacks.includes(name) && typeof callback === 'function') {
+            if (!this.#callbacks[name]) {
+                this.#callbacks[name] = [];
+            }
+            this.#callbacks[name].push(callback);
+        }
     }
 
     setState(state) {
@@ -127,12 +169,180 @@ export default class GetchatButton extends HTMLElement {
         const badge = this.shadowRoot.querySelector('.unreads');
         if (badge) {
             if (value > 0) {
+                if(value > 999) {
+                    value = Math.floor(value / 1000) + 'K'
+                }
                 badge.textContent = value;
                 addClassName(badge, 'unreads--visible');
             }
             else {
                 removeClassName(badge, 'unreads--visible');
             }
+        }
+    }
+
+    isOpened() {
+        return this.#isChatOpened;
+    }
+
+    #loadChat = (showLoader = true) => {
+        return new Promise(async (resolve, reject) => {
+            if (!this.#chatInstance) {
+                reject('Chat instance is not set');
+                return;
+            }
+
+            if(this.#chatInstance.loadingState === 2) {
+                resolve();
+                return;
+            }
+
+            try {
+                if(showLoader) {
+                    this.setState('loading');
+                }
+
+                await this.#chatInstance.load();
+
+                resolve(this.#chatInstance);
+            }
+            catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    #toggleChat() {
+        return new Promise(async (resolve, reject) => {
+
+            if (!this.#chatInstance) {
+                reject('Chat instance is not set');
+                return;
+            }
+
+            if (this.#chatInstance.loadingState !== 2) {
+                resolve();
+                return;
+            }
+
+            if (this.#isChatOpened) {
+                await this.closeChat();
+            }
+            else {
+                await this.openChat();
+            }
+
+            resolve();
+        });
+    }
+
+    #openChat = () => {
+        return new Promise(async (resolve, reject) => {
+
+            if(! this.#chatInstance) {
+                reject('Chat instance is not set');
+                return;
+            }
+
+            if (! this.#chatInstance.isLoaded()) {
+                await this.loadChat();
+            }
+
+            if (this.#isChatOpened && !this.#animationState) {
+                resolve();
+                return;
+            }
+
+            try {
+                this.#animationState = true;
+
+                await this.#callCallbacks('onBeforeOpen', this);
+
+                await cssTransitionBasedAnimate(
+                    this,
+                    styles['button-animation-preclose'],
+                    styles['button-animation-close'],
+                );
+
+                await cssTransitionBasedAnimate(
+                    this.#chatInstance?.getChatNode(),
+                    styles['chat-animation-preopen'],
+                    styles['chat-animation-opened']
+                );
+
+                await this.#callCallbacks('onAfterOpen', this);
+
+                this.#chatInstance.rpc('getchat.messenger.repaint')
+
+                startObservViewport(this.#chatInstance.getChatNode());
+
+                this.#animationState = false;
+                this.#isChatOpened = true;
+
+                this.#chatInstance.rpc('getchat.chat.input.focus');
+            }
+            catch (e) {
+                reject(e);
+            }
+
+            resolve();
+        });
+    }
+
+    #closeChat = () => {
+        return new Promise(async (resolve, reject) => {
+
+            if (!this.#isChatOpened && !this.#animationState) {
+                resolve();
+                return;
+            }
+
+            try {
+                this.#animationState = true;
+
+                finishObservViewport(this.#chatInstance.getChatNode());
+
+                await this.#callCallbacks('onBeforeClose', this);
+
+                await cssTransitionBasedAnimate(
+                    this.#chatInstance.getChatNode(),
+                    styles['chat-animation-opened'],
+                    styles['chat-animation-close']
+                );
+
+                removeClassName(this.#chatInstance.getChatNode(), styles['chat-animation-close']);
+                removeClassName(this, styles['button-animation-close']);
+
+                await cssTransitionBasedAnimate(
+                    this,
+                    styles['button-animation-preopen'],
+                    styles['button-animation-open'],
+                );
+
+                removeClassName(this, styles['button-animation-open']);
+
+                this.#animationState = true;
+                this.#isChatOpened = false;
+
+                await this.#callCallbacks('onAfterClose', this);
+
+                resolve();
+            }
+            catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    async #callCallbacks(name, ...args) {
+        const callbacks = this.#callbacks[name] || [];
+        try {
+            for (const callback of callbacks) {
+                await callback(...args);
+            }
+        }
+        catch (error) {
+            console.error(`Error in callback ${name}:`, error);
         }
     }
 
@@ -220,6 +430,7 @@ export default class GetchatButton extends HTMLElement {
             `,
             ':host(.loading)': `
                 cursor: wait;
+                pointer-events: none;
             `,
             '.button': `
                 position: relative;

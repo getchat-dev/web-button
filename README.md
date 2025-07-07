@@ -33,7 +33,7 @@ The main purpose of this library is to add a button to the page that, when click
 
 #### Module way
 ```typescript
-import { GetChat } from '@getchat-dev/web-button'
+import { createButton } from '@getchat-dev/web-button'
 
 const messenger: Chat = createButton({
     uri: GETCHAT_URL_GENRATED_ON_BACKEND,
@@ -99,14 +99,44 @@ In the [Interfaces](#createbuttonoptions) section, you will find all the availab
 
 > The Internet: An Unprecedented and Unparalleled Platform
 
-Any loading process is asynchronous, and GetChat is no exception. The `createButton` method returns an instance of the `Chat` class, which provides the `whenReady` method. This method returns a promise that resolves when the chat is loaded and ready for use.
+Any loading process is asynchronous, and GetChat is no exception. The `createButton` method returns a web custom component instance `GetChatButton`.
+To interact with the chat, use the `getChatInstance` method to obtain an instance of the `Chat` class, which provides the `whenReady` method. This method returns a promise that resolves when the chat is loaded and ready for use.
+
+#### Important Details
+
+- The `GetChatButton` instance will have a reference to the real chat `<iframe>` **only after loading has started**.
+- You can start loading the chat in two ways:
+  1. By setting the `autoload` property in the options (the chat will load immediately).
+  2. By triggering loading manually—typically when the user clicks the button.
+
+There is **no special method** to call that initializes the chat; either set `autoload` in the `createButton` options, or trigger loading by dispatching a click event on the button.
+
+#### Manual Loading Example
 
 ```typescript
-const messenger: Chat = SDK.createButton({
+const button: GetchatButton = SDK.createButton({
     uri: GETCHAT_URL_GENRATED_ON_BACKEND,
 });
 
-messenger.whenReady().then(async function () {
+// Manual: start loading the chat when the button is clicked
+button.addEventListener('click', () => {
+    const chat = button.getChatInstance();
+    chat.whenReady().then(() => {
+        console.log('Chat is ready');
+    });
+});
+```
+
+#### With Autoload
+
+```typescript
+const button: GetchatButton = SDK.createButton({
+    uri: GETCHAT_URL_GENRATED_ON_BACKEND,
+    autoload: true
+});
+
+const chat = button.getChatInstance();
+chat.whenReady().then(() => {
     console.log('Chat is ready');
 });
 ```
@@ -128,7 +158,7 @@ Currently, the library supports changing the following seven parameters:
 When creating the button, you can pass style parameters in the options object.
 
 ```typescript
-const messenger: Chat = SDK.createButton({
+const button: GetChatButton = SDK.createButton({
     uri: GETCHAT_URL_GENRATED_ON_BACKEND,
     bdcolor: 'white',
     color: 'black',
@@ -142,16 +172,12 @@ const messenger: Chat = SDK.createButton({
 Here's an example of how to change the button style using the standard browser API through `Element.setAttribute`:
 
 ```typescript
-messenger.whenReady().then(async function () {
-    // get button node
-    const button = chat.getButton();
-    if (button) {
-        button.setAttribute('data-bgcolor', 'white');
-        button.setAttribute('data-color', 'black');
-        button.setAttribute('data-bdradius', '8px');
-        button.setAttribute('data-bdwidth', '1px');
-    }
-});
+const button: GetChatButton = SDK.createButton({/* some params */});
+
+button.setAttribute('data-bgcolor', 'white');
+button.setAttribute('data-color', 'black');
+button.setAttribute('data-bdradius', '8px');
+button.setAttribute('data-bdwidth', '1px');
 ```
 
 ### How to Set a Custom Icon
@@ -162,23 +188,20 @@ Users can customize the button icon by passing either a **URL** or an **SVG stri
 
 **Using an Icon URL:**
 ```typescript
-const button: GetChatButton = messenger.getButton();
-if (button) {
-    button.setCustomIcon('https://example.com/my-custom-icon.png');
-}
+const button: GetChatButton = SDK.createButton({/* some params */});
+
+button.setCustomIcon('https://example.com/my-custom-icon.png');
 ```
 
 **Using an SVG String:**
 ```typescript
-const button: GetChatButton = messenger.getButton();
-if (button) {
-    button.setCustomIcon(`
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" stroke="black" stroke-width="2" fill="white"/>
-            <path d="M8 12L12 16L16 12" stroke="black" stroke-width="2"/>
-        </svg>
-    `);
-}
+const button: GetChatButton = SDK.createButton({/* some params */});
+button.setCustomIcon(`
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="black" stroke-width="2" fill="white"/>
+        <path d="M8 12L12 16L16 12" stroke="black" stroke-width="2"/>
+    </svg>
+`);
 ```
 
 #### Important Notes
@@ -282,9 +305,11 @@ if (status === "granted" && token) {
 To handle chat events, you can use the `addEventListener` method. For example, to handle the event of a new message, you can use the following code. It opens the chat upon receiving a new message and logs "New message received" to the console.
 
 ```typescript
-const messenger: Chat = SDK.createButton({
+const button: GetChatButton = SDK.createButton({
     uri: GETCHAT_URL_GENRATED_ON_BACKEND
 });
+
+button.
 
 messenger.addEventListener('getchat.chat.message.new', function () {
     messenger.open();
@@ -352,21 +377,15 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 
 ### ChatOptions Interface
 
-| Property            | Type                            | Default | Description                                                  |
-|---------------------|---------------------------------|---------|--------------------------------------------------------------|
-| `id`                | `string`                        | N/A     | A unique identifier for the chat instance.                   |
-| `url`               | `string`                        | N/A     | The URL of the chat service.                                 |
-| `button`            | `HTMLElement \| null`           | N/A     | Optional HTML element for the chat trigger button.           |
-| `autoload`          | `boolean`                       | `false` | Whether to load the chat automatically on page load.         |
-| `autoopen`          | `boolean`                       | `false` | Whether to start the chat automatically after loading.       |
-| `autoopenDelay`     | `number`                        | N/A     | Delay in milliseconds before automatically opening the chat. |
-| `closeOnEscape`     | `boolean`                       | `true`  | Whether to close the chat on escape press.                   |
-| `onBeforeEmbedChat` | `() => void`                    | N/A     | Callback before the chat is embedded on the page.            |
-| `onChatLoaded`      | `() => void`                    | N/A     | Callback when the chat is fully loaded.                      |
-| `onBeforeOpen`      | `() => void`                    | N/A     | Callback before the chat is opened.                          |
-| `onAfterOpenChat`   | `() => void`                    | N/A     | Callback after the chat is opened.                           |
-| `onBeforeClose`     | `() => void`                    | N/A     | Callback before the chat is closed.                          |
-| `onAfterCloseChat`  | `() => void`                    | N/A     | Callback after the chat is closed.                           |
+| Property                       | Type                            | Default | Description                                                  |
+|--------------------------------|---------------------------------|---------|--------------------------------------------------------------|
+| `id`                           | `string`                       .      | N/A     | A unique identifier for the chat instance.             |
+| `url`                          | `string`                       .      | N/A     | The URL of the chat service.                           |
+| `node`                         | `HTMLElement \| string \| null`.      | N/A     | The HTML element where the chat will be embedded.      |
+| `nodeStyle`                    | `Partial<CSSStyleDeclaration>` .      | N/A     | Custom styles to apply to the chat node.               |
+| `handleKeyboardOnTouchDevices` | `boolean`                      .      | `true`  | Whether to handle keyboard events on touch devices.    |
+| `onBeforeLoad`                 | `(iframe: HTMLIFrameElement) => void` | N/A     | Callback function to call before the chat is loaded.   |
+| `onLoaded`                     | `() => void`                   .      | N/A     | Callback when the chat is fully loaded.                |
 
 ### InitWebPushNotificationsOptions Interface
 | Property                | Type                            | Default | Description                                                  |
@@ -375,18 +394,19 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 
 ### Chat Class
 
+#### Note:
+
+Instantiating a Chat does not automatically create or load a chat `<iframe>`. This is by design: creating an object should never cause direct DOM side effects. Embedding and loading an iframe is a resource-intensive operation and should be performed explicitly (e.g., via the load or open method), allowing you to control when and if the chat interface appears in the DOM.
+
+The `load` method returns the same promise as `whenReady` until this promise is settled (resolved or rejected). While loading is still in progress, repeated calls to both `load` and `whenReady` will return the same pending promise. Once the loading promise is settled, subsequent calls to either method will return new promises.
+
 | Method              | Parameters                                         | Returns                     | Description                                                   |
 |---------------------|----------------------------------------------------|-----------------------------|---------------------------------------------------------------|
-| `constructor`       | `options: ChatOptions`                             | N/A                         | Initializes a new chat instance with the provided options.    |
-| `whenReady`         | N/A                                                | `Promise<void>`             | Resolves when the messenger is loaded and ready for interaction.              |
-| `load`              | `showLoader?: boolean`                             | `Promise<void>`             | Loads the chat interface, optionally showing a loader.        |
-| `isLoaded`          | N/A                                                | `boolean`                   | Returns `true` if the chat iframe is fully loaded.           |
-| `isOpened`          | N/A                                                | `boolean`                   | Returns `true` if the chat window is currently open.         |
-| `toggle`            | N/A                                                | `Promise<void>`             | Toggles the visibility of the chat interface.                 |
-| `open`              | N/A                                                | `Promise<void>`             | Opens the chat interface.                                     |
-| `close`             | N/A                                                | `Promise<void>`             | Closes the chat interface.                                    |
+| `constructor`       | `options: ChatOptions`                             | N/A                         | Initializes a new chat instance with the provided options.     |
+| `whenReady`         | N/A                                                | `Promise<void>`             | Resolves to `true` if the messenger is loaded successfully, or `false` otherwise.              |
+| `load`              | N/A                                                | `Promise<void>`             | Loads the chat interface, optionally showing a loader.        |
+| `isLoaded`          | N/A                                                | `boolean`                   | Returns `true` if the chat iframe is fully loaded.            |
 | `addEventListener`  | `event: string, listener: () => void`              | N/A                         | Registers an event listener for specified chat events.        |
-| `getButton`         | N/A                                                | `HTMLElement \| null`       | Returns the chat trigger button element, if any.              |
 | `getChatNode`       | N/A                                                | `HTMLElement \| null`       | Retrieves the chat container element.                         |
 | `getChatIframeNode` | N/A                                                | `HTMLElement \| null`       | Retrieves the chat's iframe element, if using an iframe.      |
 | `rpc`               | `method: string, params: any[], timeout?: number`  | `Promise<any>`              | Performs a remote procedure call to the chat service.         |
@@ -398,16 +418,21 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 
 The `GetChatButton` class represents the custom chat button element and provides various methods for managing its state, icon, styles, and chat instance.
 
-| Method               | Parameters                                      | Returns          | Description                                                   |
+| Method               | Parameters                                      | Returns          | Description                                                 |
 |----------------------|-----------------------------------------------|------------------|---------------------------------------------------------------|
 | `constructor`        | N/A                                           | N/A              | Initializes a new instance of `GetChatButton`.                |
-| `setChatInstance`    | `chatInstance: Chat`                         | `void`           | Associates a `Chat` instance with this button.                |
+| `setChatInstance`    | `chatInstance: Chat`                          | `void`           | Associates a `Chat` instance with this button.                |
 | `getChatInstance`    | N/A                                           | `Chat`           | Retrieves the associated `Chat` instance.                     |
-| `setState`          | `state: 'loaded' | 'loading'`                | `void`           | Sets the state of the button (e.g., `"loading"`, `"loaded"`). |
-| `setBadge`          | `value: number`                               | `void`           | Sets the badge count on the button.                           |
-| `setCustomIcon`     | `icon: string, catchError: boolean`           | `boolean`        | Sets a custom icon, either as an image URL or an SVG string.  |
-| `setStyles`         | `styles: object`                              | `void`           | Applies custom styles to the button.                          |
-| `render`            | N/A                                           | `void`           | Re-renders the button element.                                |
+| `loadChat`           | `showLoader?: boolean`                        | `Promise<void>`  | Loads the chat interface, optionally showing a loader.        |
+| `toggleChat`         | N/A                                           | `Promise<void>`  | Toggles the visibility of the chat interface.                 |
+| `openChat`           | N/A                                           | `Promise<void>`  | Opens the chat interface.                                     |
+| `closeChat`          | N/A                                           | `Promise<void>`  | Closes the chat interface.                                    |
+| `isOpened`           | N/A                                           | `boolean`        | Returns `true` if the chat window is currently open.          |
+| `setState`           | `state: 'loaded' | 'loading'`                 | `void`           | Sets the state of the button (e.g., `"loading"`, `"loaded"`). |
+| `setBadge`           | `value: number`                               | `void`           | Sets the badge count on the button.                           |
+| `setCustomIcon`      | `icon: string, catchError: boolean`           | `boolean`        | Sets a custom icon, either as an image URL or an SVG string.  |
+| `setStyles`          | `styles: object`                              | `void`           | Applies custom styles to the button.                          |
+| `render`             | N/A                                           | `void`           | Re-renders the button element.                                |
 
 #### Custom Element Registration
 The `GetChatButton` class is registered as a custom HTML element and can be used in the DOM as `<getchat-button>`. It is also available in the global `HTMLElementTagNameMap`:

@@ -1,28 +1,52 @@
 import onMessage from '@/onMessage';
-import { isSafari, isTouchDevice } from '@/utils';
+import { isSafari, isTouchDevice, isPlainObject } from '@/utils';
 
-export default function (rootElement, src, style, onload, onclose) {
-    if(!(rootElement instanceof Element)) {
+export default function (rootElement, src, { style = { width: '100%', height: '100%' }, onbeforeload, onready, onload, onerror } = {}) {
+    if(!(rootElement instanceof HTMLElement)) {
         rootElement = document.body;
     }
 
-    const frame = document.createElement('iframe');
-    frame.src = src;
+    let frame;
+    if(rootElement instanceof HTMLIFrameElement) {
+        frame = rootElement;
+    }
+    else {
+        frame = document.createElement('iframe');
+
+        if(isPlainObject(style)) {
+            Object.assign(frame.style, style);
+        }
+    }
+
+    if(typeof onbeforeload === 'function') {
+        onbeforeload(frame);
+    }
+
+    if(typeof onload === 'function') {
+        frame.onload = onload;
+    }
+    if(typeof onerror === 'function') {
+        frame.onerror = onerror;
+    }
+
+    if(src && ! frame.src) {
+        frame.src = src;
+    }
+
     frame.setAttribute('frameborder', '0');
     frame.setAttribute('seamless', 'seamless');
 
-    frame.style.width = '100%';
-    frame.style.height = '100%';
-
     onMessage('getchat.loaded', function () {
-        if(typeof onload === 'function') {
-            onload(frame);
+        if(typeof onready === 'function') {
+            onready(frame);
         }
 
         return -1;
     }, frame);
 
-    rootElement.appendChild(frame);
+    if(rootElement !== frame) {
+        rootElement.appendChild(frame);
+    }
 
     if(! (isTouchDevice() || isSafari())) {
         // for some browser chrome, maybe firefox it wiil prevent back gesture

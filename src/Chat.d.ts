@@ -5,57 +5,43 @@ export interface ChatOptions {
     id: string;
     /**
      * The URL of the chat service.
-     */
-    url: string;
-    /**
-     * The HTML element representing the button, or null if not applicable.
-     * If null, the button will be automatically created within document.body.
+     * If the node parameter is an HTMLIframeElement, the src attribute of the iframe will be used as the chat URL.
      * default: null
      */
-    button?: HTMLElement | null;
+    url?: string;
+
     /**
-     * Whether to autoload the chat. Default is false.
-     * default: false
+     * The HTML element or selector where the chat will be embedded.
+     * If a string is provided, it will be used as a CSS selector to find the element.
+     * If an HTMLElement is provided, it will be used directly.
+     * If an HTMLIframeElement is provided, it will be used as the chat iframe.
+     * default: null
+     * @example
+     * Using a CSS selector
+     * node: '#chat-container'
+     * @example
+     * Using an HTMLElement
+     * node: document.getElementById('chat-container')
      */
-    autoload?: boolean;
+    node?: HTMLElement | string;
+
     /**
-     * Whether to autoopen the chat. Default is false.
-     * default: false
+     * The style only to apply to the passed HTMLElement passed through the node option.
+     * This should be a record of CSS properties and values.
+     * default: { width: '100%', height: '100%' }
      */
-    autoopen?: boolean;
+    nodeStyle: Record<string, string>;
+
     /**
-     * Delay in milliseconds before open the chat automatically.
+     * Callback function to call before the chat is loaded.
+     * @param iframe The iframe element used for the chat.
+     * @returns void
      */
-    autoopenDelay?: number;
-    /**
-     * Whether to close the chat on escape press.
-     * default: true
-     */
-    closeOnEscape?: boolean;
-    /**
-     * Callback function to call before embedding the chat to page.
-     */
-    onBeforeEmbedChat?: () => void;
+    onBeforeLoad?: (iframe: HTMLIFrameElement) => void;
     /**
      * Callback function to call when the chat is loaded.
      */
-    onChatLoaded?: () => void;
-    /**
-     * Callback function to call before opening the chat.
-     */
-    onBeforeOpenChat?: () => Promise<void> | void;
-    /**
-     * Callback function to call after opening the chat.
-     */
-    onAfterOpenChat?: () => Promise<void> | void;;
-    /**
-     * Callback function to call before closing the chat.
-     */
-    onBeforeCloseChat?: () => Promise<void> | void;;
-    /**
-     * Callback function to call after closing the chat.
-     */
-    onAfterCloseChat?: () => Promise<void> | void;;
+    onLoaded?: () => void;
 }
 
 export type NotificationPermissionResult = {
@@ -77,17 +63,7 @@ export declare class Chat {
 
     isLoaded(): boolean;
 
-    isOpened(): boolean;
-
-    toggle(): Promise<void>;
-
-    open(): Promise<void>;
-
-    close(): Promise<void>;
-
     addEventListener(event: string, listener: EventListenerOrEventListenerObject): void;
-
-    getButton(): HTMLElement | null;
 
     getChatNode(): HTMLElement | null;
 
