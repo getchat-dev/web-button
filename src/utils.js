@@ -6,6 +6,18 @@ const uuid = function () {
     });
 };
 
+const isString = function (value, notEmpty = false) {
+    if (typeof value !== 'string') {
+        return false;
+    }
+
+    if (notEmpty && value.length === 0) {
+        return false;
+    }
+
+    return true;
+}
+
 const addClassName = function (node, classNames) {
 
     if(! (node instanceof Node)) {
@@ -569,6 +581,7 @@ const asyncEmbedIframe = callbackFuncToAsync(embedIframe, 'onload', 'onerror');
 
 export {
     uuid,
+    isString,
     addClassName,
     removeClassName,
     dispatchEvent,

@@ -3,23 +3,50 @@
  */
 
 /**
- * Detects the Operating System and Browser using User-Agent Client Hints
- * with a fallback to the User-Agent string.
+ * A private variable to store the cached device information.
+ * It will be null until the first call to detectDevice().
+ * @type {Object|null}
+ */
+let _cachedDeviceInfo = null;
+
+/**
+ * Detects the Operating System, Browser information, and Standalone mode status.
+ * Uses User-Agent Client Hints with a fallback to the User-Agent string.
  * This function does not interact with the DOM.
  *
- * @returns {Object} An object containing 'os', 'browser', and 'apiUsed' properties.
+ * This function caches its result after the first call. Subsequent calls will
+ * return the cached information without re-detecting.
+ *
+ * @returns {Object} An object containing 'os', 'browser', 'isStandalone', and 'apiUsed' properties.
  * - os: The detected operating system (e.g., 'iOS', 'Windows', 'macOS').
  * - browser: An object containing:
  * - name: The detected browser's name (e.g., 'Chrome', 'Safari', 'Firefox').
  * - version: The detected browser's version (major version for UA-CH, 'Unknown' for User-Agent string fallback).
+ * - isStandalone: A boolean indicating if the app is running in standalone mode (e.g., PWA, iOS Home Screen app).
  * - apiUsed: The API used for detection ('User-Agent Client Hints' or 'User-Agent String').
  */
 export default function detectDevice() {
+    // If device information is already cached, return it immediately.
+    if (_cachedDeviceInfo) {
+        return _cachedDeviceInfo;
+    }
+
     let os = 'Unknown OS';
-    let browser = { name: 'Unknown Browser', version: 'Unknown' }; // Initialize browser as an object
+    let browser = { name: 'Unknown Browser', version: 'Unknown' };
+    let isStandalone = false; // Initialize standalone mode status
     let apiUsed = 'Unknown API';
     // Get user agent string once and convert to lowercase for consistent comparisons
     const userAgentLower = navigator.userAgent.toLowerCase();
+
+    // Determine standalone mode
+    // navigator.standalone is primarily for iOS Home Screen apps
+    // matchMedia is for general PWA standalone display mode
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+        isStandalone = true;
+    } else if (navigator.standalone) { // Deprecated but still relevant for older iOS
+        isStandalone = true;
+    }
+
 
     // Check if User-Agent Client Hints API is available
     if (navigator.userAgentData) {
@@ -200,6 +227,7 @@ export default function detectDevice() {
         }
     }
 
-    // Return the detected information as an object
-    return { os, browser, apiUsed };
+    // Cache the detected information before returning
+    _cachedDeviceInfo = { os, browser, isStandalone, apiUsed };
+    return _cachedDeviceInfo;
 }

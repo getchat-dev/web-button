@@ -1,4 +1,4 @@
-import { safeJSONParse, iframeRPC, singletonPromise } from '@/utils.js'
+import { safeJSONParse, iframeRPC, singletonPromise, isString } from '@/utils.js'
 import { startObservViewport } from '@/viewportObserver';
 import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
@@ -241,7 +241,7 @@ export default class Chat {
      *   console.error('Failed to initialize web push notifications:', error);
      * }
      */
-    async initWebPushNotification({onNotificationClicked = null} = {}) {
+    async initWebPushNotification({onNotificationClicked = null, iosStandalonePWALink = null} = {}) {
         // const module = await import('@/fcm.js');
         // if(! module) {
         //     throw new Error('Failed to load fcm.js');
@@ -289,6 +289,14 @@ export default class Chat {
 
         // let's know getchat about the permission status
         this.rpc('getchat.messenger.webpush.permission.set', permission);
+        if(isString(iosStandalonePWALink, true)) {
+            try {
+                await this.rpc('getchat.messenger.webpush.ios-pwa-link.set', {link: iosStandalonePWALink});
+            }
+            catch (e) {
+                console.warn('Failed to set iosStandalonePWALink:', e.message);
+            }
+        }
 
         if (permission.status !== 'denied') {
 

@@ -391,6 +391,7 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 | Property                | Type                            | Default | Description                                                  |
 |-------------------------|---------------------------------|---------|--------------------------------------------------------------|
 | `onNotificationClicked` | `(event: NotificationEvent) => void` | N/A     | Callback function to call when a user clicks on a notification and existing window is focused. |
+| `iosStandalonePWALink`  | `string \| null`                | `null`  | A link to the iOS standalone PWA, used for web push notifications. This is required for iOS devices to handle notifications correctly. |
 
 ### Chat Class
 

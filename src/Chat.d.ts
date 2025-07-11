@@ -52,6 +52,7 @@ export type NotificationPermissionResult = {
 
 export type InitWebPushNotificationsOptions = {
     onNotificationClicked?: (event: NotificationEvent) => void;
+    iosStandalonePWALink: string | null;
 }
 
 export declare class Chat {
