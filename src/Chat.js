@@ -1,4 +1,4 @@
-import { safeJSONParse, iframeRPC, singletonPromise, isString } from '@/utils.js'
+import { safeJSONParse, iframeRPC, singletonPromise, isPlainObject, isString } from '@/utils.js'
 import { startObservViewport } from '@/viewportObserver';
 import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
@@ -24,6 +24,8 @@ export default class Chat {
     #readyPromise;
 
     #fcmManager;
+
+    #welcomeMessage;
 
     constructor({ id, url, node, nodeStyle, onBeforeChatLoad, onLoaded, handleKeyboardOnTouchDevices = true }) {
 
@@ -241,7 +243,7 @@ export default class Chat {
      *   console.error('Failed to initialize web push notifications:', error);
      * }
      */
-    async initWebPushNotification({onNotificationClicked = null, iosStandalonePWALink = null} = {}) {
+    async initWebPushNotification({onNotificationClicked = null, iosStandalonePWALink = null, welcomeMessage = null} = {}) {
         // const module = await import('@/fcm.js');
         // if(! module) {
         //     throw new Error('Failed to load fcm.js');
@@ -249,6 +251,10 @@ export default class Chat {
         // if(! module.default) {
         //     throw new Error('fcm.js does not have default export');
         // }
+
+        if(isPlainObject(welcomeMessage)) {
+            this.#welcomeMessage = welcomeMessage;
+        }
 
         const { config: fcmConfig } = await this.rpc('getchat.messenger.getFCMConfig');
         if (!fcmConfig) {
@@ -274,7 +280,7 @@ export default class Chat {
             // maybe it is a bug in safari https://bugs.webkit.org/show_bug.cgi?id=279277
             if(! prevTokenData || (prevTokenData?.token != permission.token && prevTokenData?.userId == userId)) {
                 // we need to save new token to getchat
-                if(await this.#putTokenToGetchat(permission.token)) {
+                if(await this.#putTokenToGetchat(permission.token, this.#welcomeMessage ? { welcomeMessage: this.#welcomeMessage } : undefined)) {
                     localStorage.setItem(FCM_TOKEN_STORAGE_KEY, JSON.stringify({token: permission.token, userId}));
                 }
             }
@@ -413,7 +419,7 @@ export default class Chat {
 
             localStorage.removeItem(WEBPUSH_DISABLED_STORAGE_KEY);
 
-            if (await this.#putTokenToGetchat(response.token)) {
+            if (await this.#putTokenToGetchat(response.token, this.#welcomeMessage ? { welcomeMessage: this.#welcomeMessage } : undefined)) {
                 localStorage.setItem(FCM_TOKEN_STORAGE_KEY, JSON.stringify({token: response.token, userId}));
                 response.persisted = true;
             }
@@ -443,8 +449,13 @@ export default class Chat {
         return status;
     }
 
-    async #putTokenToGetchat(token) {
-        const { status } = await this.rpc('getchat.messenger.fcm_token.register', { token });
+    async #putTokenToGetchat(token, payload = {}) {
+        if(! isPlainObject(payload)) {
+            payload = Object.create(null);
+        }
+        payload.token = token;
+
+        const { status } = await this.rpc('getchat.messenger.fcm_token.register', payload);
 
         return status ?? false;
     }

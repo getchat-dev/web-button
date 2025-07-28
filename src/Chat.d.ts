@@ -50,9 +50,16 @@ export type NotificationPermissionResult = {
     persisted?: boolean;
 };
 
+export type Notification = {
+    title?: string;
+    body: string;
+    icon?: string;
+}
+
 export type InitWebPushNotificationsOptions = {
     onNotificationClicked?: (event: NotificationEvent) => void;
     iosStandalonePWALink: string | null;
+    welcomeMessage?: Notification;
 }
 
 export declare class Chat {
