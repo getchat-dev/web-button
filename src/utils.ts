@@ -6,7 +6,7 @@ const uuid = function () {
     });
 };
 
-const isString = function (value, notEmpty = false) {
+const isString = function (value: unknown, notEmpty = false): value is string {
     if (typeof value !== 'string') {
         return false;
     }
@@ -18,9 +18,9 @@ const isString = function (value, notEmpty = false) {
     return true;
 }
 
-const addClassName = function (node, classNames) {
+const addClassName = function (node: HTMLElement, classNames: string | string[] | null): void {
 
-    if(! (node instanceof Node)) {
+    if(! (node instanceof HTMLElement)) {
         throw new Error('first argument have to be a DOM Node');
     }
 
@@ -46,9 +46,9 @@ const addClassName = function (node, classNames) {
     }
 }
 
-const removeClassName = function(el, classNames) {
-        
-    if(!el instanceof Node) {
+const removeClassName = function(el: HTMLElement, classNames: string | string[] | null): void {
+
+    if(!(el instanceof HTMLElement)) {
         throw new Error('el arg must be DOM Node')
     }
 
@@ -73,7 +73,7 @@ const removeClassName = function(el, classNames) {
     }
 }
 
-const dispatchEvent = function(node, name, opts = {})
+const dispatchEvent = function(node: Node, name: string, opts: Nullable<Record<string, any>> = null)
 {
     if(!(node instanceof Node)) {
         throw new Error('first argument must be a DOM Node')
@@ -94,37 +94,17 @@ const dispatchEvent = function(node, name, opts = {})
 
 export default dispatchEvent;
 
-const stringToJSON = function (str, error = false) {
-    if (typeof (str) !== 'string') {
-        if (error) {
-            throw new Error('str argument must be a string, ' + typeof (str) + ' given');
-        }
-        return null;
-    }
-
-    try {
-        return JSON.parse(str);
-    }
-    catch (e) {
-        if (error) {
-            throw e;
-        }
-    }
-
-    return null;
-}
-
-const unescapeHTML = function (str) {
+const unescapeHTML = function (str: string | unknown): string | unknown {
     if (typeof (str) !== 'string') {
         return str;
     }
 
     var div = document.createElement('div');
     div.innerHTML = str;
-    return div.firstChild.nodeValue;
+    return div.firstChild?.nodeValue ?? null;
 }
 
-const scalarToBoolean = function (str, defaultVal = false) {
+const scalarToBoolean = function (str: any, defaultVal: boolean = false): boolean {
     switch (typeof (str)) {
         case 'boolean':
             return str;
@@ -137,11 +117,11 @@ const scalarToBoolean = function (str, defaultVal = false) {
     return defaultVal;
 }
 
-const toDecimal = function (str) {
+const toDecimal = function (str: string): number {
     return parseInt(str, 10);
 }
 
-const toColor = function (str, defaultVal = null) {
+const toColor = function (str: string, defaultVal: unknown = null): unknown {
     // check that var is a look like a color
     if (/^#[0-9A-F]{6}$/i.test(str)) {
         return str;
@@ -155,7 +135,7 @@ const toColor = function (str, defaultVal = null) {
     return defaultVal;
 }
 
-const toPercent = function (str, defaultVal = null) {
+const toPercent = function (str: string, defaultVal: unknown = null): unknown {
     if (/^\d+(\.\d+)?%$/.test(str)) {
         return str;
     }
@@ -163,7 +143,7 @@ const toPercent = function (str, defaultVal = null) {
     return defaultVal;
 }
 
-const toUrl = function (str, defaultVal = null) {
+const toUrl = function (str: string, defaultVal: unknown = null): unknown {
     if (typeof (str) === 'string' && str.length === 0) {
         try {
             URL.parse(str);
@@ -178,7 +158,7 @@ const toUrl = function (str, defaultVal = null) {
     return defaultVal;
 }
 
-const doCast = function (fnCast, val) {
+const doCast = function (fnCast: Function, val: unknown): unknown {
     if (val === null || val === undefined) {
         return null;
     }
@@ -186,7 +166,14 @@ const doCast = function (fnCast, val) {
     return fnCast(val);
 }
 
-const compartmentalizeCssValue = function (str, defaultVal = null) {
+export type CompartmentalizedCssValue = {
+    value: number;
+    integer: number;
+    fraction: number;
+    unit: string;
+};
+
+const compartmentalizeCssValue = function (str: string, defaultVal: unknown = null): CompartmentalizedCssValue | string | unknown {
     if (typeof (str) === 'string' && str.length > 0) {
         // try to find numberic value and after that unit
         let match = str.match(/^((\d+)(\.(\d)+)?)(.*)$/);
@@ -206,28 +193,41 @@ const compartmentalizeCssValue = function (str, defaultVal = null) {
     return defaultVal;
 }
 
-const getAttr = function (el, name) {
-    let fnCast = String;
+const getAttrSupportedTypesHandlersMap: Record<string, Function> = {
+    'string': String,
+    'decimal': toDecimal,
+    'number': Number,
+    'boolean': scalarToBoolean,
+    'bool': scalarToBoolean,
+    'color': toColor,
+    'url': toUrl,
+    'percent': toPercent
+};
+
+type supportedAttributeTypes = keyof typeof getAttrSupportedTypesHandlersMap;
+
+const getAttr = function (el: HTMLElement, name: string, ...args: any[]): string | number | boolean | null {
+    let fnCast: Function = String;
     let defaultVal = null;
 
-    if (arguments.length > 2) {
-        const supportedTypes = {'string': String, 'decimal': toDecimal, 'number': Number, 'boolean': scalarToBoolean, 'bool': scalarToBoolean, 'color': toColor, 'url': toUrl};
-        if (! supportedTypes.hasOwnProperty(arguments[2])) {
-            throw new Error('3rd arg must be one of the following types: '+Object.keys(supportedTypes).join(', '));
+    if (args.length > 1) {
+        const type: supportedAttributeTypes = args[0] as supportedAttributeTypes;
+        if (! getAttrSupportedTypesHandlersMap.hasOwnProperty(type)) {
+            throw new Error('3rd arg must be one of the following types: '+Object.keys(getAttrSupportedTypesHandlersMap).join(', '));
         }
-        fnCast = supportedTypes[arguments[2]];
-        defaultVal = arguments[3];
+        fnCast = getAttrSupportedTypesHandlersMap[type];
+        defaultVal = args[1] ?? null;
     }
-    else if (arguments.length === 3) {
-        defaultVal = arguments[2];
+    else if (args.length === 1) {
+        defaultVal = args[0] ?? null;
     }
 
-    if (el instanceof Element) {
+    if (el instanceof HTMLElement) {
         if ('getAttribute' in el) {
             return doCast(fnCast, unescapeHTML(el.getAttribute(name))) ?? defaultVal;
         }
         else {
-            let attrs = Array.prototype.slice.call(el.attributes);
+            let attrs = Array.prototype.slice.call(el['attributes'] ?? []);
 
             for(let i = 0, len = attrs.length; i < len; i++) {
                 if(attrs[i].nodeName === name) {
@@ -240,17 +240,17 @@ const getAttr = function (el, name) {
     return null;
 }
 
-const isPlainObject = function(obj) {
+const isPlainObject = function(obj: unknown): obj is Record<string, any> {
     return Object.prototype.toString.apply(obj) === '[object Object]'
 }
 
-const buildQueryString = function(params) {
+const buildQueryString = function(params: Record<string, any>): string {
     let queryString = '';
     let availableTypes = ['string', 'number', 'boolean']
 
     if(isPlainObject(params)) {
         for(let key in params) {
-            
+
             if(availableTypes.indexOf(typeof(params[key])) > -1) {
                 queryString+= '&'+key+'='+params[key];
             }
@@ -264,13 +264,15 @@ const buildQueryString = function(params) {
     return queryString;
 }
 
-const parseClassNames = function (classNames) {
+const parseClassNames = function (classNames: string | string[] | Record<string, boolean>): Nullable<string> {
     if (typeof (classNames) === 'string' && classNames.length) {
         return classNames;
     }
     else if (isPlainObject(classNames)) {
-        return Object.keys(classNames).filter(function (className) {
-            return classNames[className] !== false;
+        // only to avoid a ts error
+        const record = classNames as Record<string, boolean>;
+        return Object.keys(record).filter(function (className: string) {
+            return record[className] !== false;
         }).join(' ');
     }
     else if(Array.isArray(classNames)) {
@@ -280,17 +282,11 @@ const parseClassNames = function (classNames) {
     return null;
 }
 
-const addStyleToDocument = function(cssText = '', parent = null) {
-    let styleNode = document.createElement('STYLE');
+const addStyleToDocument = function(cssText = '', parent: Nullable<Element> = null) {
+    const styleNode: HTMLStyleElement = document.createElement('style');
 
-    styleNode.type = 'text/css';
 
-    if(styleNode.styleSheet) {
-        styleNode.styleSheet.cssText = cssText
-    }
-    else {
-        styleNode.appendChild(document.createTextNode(cssText))
-    }
+    styleNode.textContent = cssText;
 
     if(!(parent instanceof Element)) {
         parent = document.head || document.getElementsByTagName('head')[0]
@@ -299,27 +295,36 @@ const addStyleToDocument = function(cssText = '', parent = null) {
     parent.appendChild(styleNode)
 }
 
-const transitionEnd = (function() {
+const transitionEnd: string = (function() {
 
-    var transitions = {
+    const transitions: Record<string, string> = {
         "transition"      : "transitionend",
         "OTransition"     : "oTransitionEnd",
         "MozTransition"   : "transitionend",
         "WebkitTransition": "webkitTransitionEnd"
     };
 
-    var fakeEl = document.createElement('div');
+    let fakeEl: HTMLDivElement = document.createElement('div');
 
-    for(var t in transitions) {
-        if(fakeEl.style[t] !== undefined) {
-            return transitions[t]
+    for(let t in transitions) {
+        if((t as keyof CSSStyleDeclaration) in fakeEl.style) {
+            return transitions[t];
         }
     }
 
-    return null;
+    return transitions['transition'];
 })();
 
-const iframeRPC = function (iframe, event, data = null) {
+/**
+ * Sends a message to an iframe using postMessage.
+ *
+ * @param {HTMLIFrameElement} iframe
+ * @param {string} event
+ * @param {Record<string, any>} [data]
+ *
+ * @returns {string|null} rpcId
+ */
+const iframeRPC = function (iframe: HTMLIFrameElement, event: string, data: Nullable<Record<string, any>> = null): Nullable<string> {
 
     let payload = {
         rpcId: uuid(),
@@ -328,10 +333,10 @@ const iframeRPC = function (iframe, event, data = null) {
 
     if (data) {
         if (typeof (data) === 'string') {
-            data = stringToJSON(data);
+            data = safeJSONParse(data)!;
         }
 
-        if (typeof (data) !== 'object') {
+        if (! isPlainObject(data)) {
             throw new Error('data argument must be an object, ' + typeof (data) + ' given');
         }
 
@@ -339,7 +344,7 @@ const iframeRPC = function (iframe, event, data = null) {
     }
 
     if(iframe instanceof HTMLIFrameElement) {
-        iframe.contentWindow.postMessage(JSON.stringify(payload), '*')
+        iframe.contentWindow?.postMessage(JSON.stringify(payload), '*')
 
         return payload.rpcId;
     }
@@ -347,27 +352,16 @@ const iframeRPC = function (iframe, event, data = null) {
     return null;
 }
 
-const sanitizeOnMessageEvent = function(e) {
-    let data = {}
-
-    if(e.data) {
-        if(typeof(e.data) === 'string') {
-            try {
-                data = JSON.parse(e.data);
-            }
-            catch(e) {
-                console.error(e);
-            }
-        }
-        else {
-            data = e.data;
-        }
-    }
-
-    return data;
+type embedIframeOptions = {
+    rootElement?: Nullable<Element>,
+    url: string,
+    onload?: () => void,
+    onerror?: () => void,
+    className?: string,
+    inlineStyles?: Record<string, string>
 }
 
-const embedIframe = function ({ rootElement, url, onload, onerror, className, inlineStyles })
+const embedIframe = function ({ rootElement, url, onload, onerror, className, inlineStyles }: embedIframeOptions) : HTMLIFrameElement
 {
     if(!(rootElement instanceof Element) || rootElement === document.documentElement)
     {
@@ -401,7 +395,7 @@ const embedIframe = function ({ rootElement, url, onload, onerror, className, in
     return frame;
 }
 
-const callbackFuncToAsync = function (fn, resolveCallback, rejectCallback) {
+const callbackFuncToAsync = function (fn: Function, resolveCallback: string, rejectCallback: Nullable<string> = null) {
     if (typeof (resolveCallback) !== 'string') {
         throw new Error('resolveCallback argument must be a string, ' + typeof (resolveCallback) + ' given');
     }
@@ -410,7 +404,7 @@ const callbackFuncToAsync = function (fn, resolveCallback, rejectCallback) {
         throw new Error('rejectCallback argument must be a string or null, ' + typeof (rejectCallback) + ' given');
     }
 
-    const _checkParameter = function(obj, key) {
+    const _checkParameter = function(obj: unknown, key: string) {
         if (! isPlainObject(obj)) {
             throw new Error('First argument must be an object');
         }
@@ -420,18 +414,23 @@ const callbackFuncToAsync = function (fn, resolveCallback, rejectCallback) {
     }
 
     return function () {
-        const args = Array.prototype.slice.call(arguments);
+        const args: any[] = Array.prototype.slice.call(arguments);
 
         _checkParameter(args[0], resolveCallback);
-        _checkParameter(args[0], rejectCallback);
+        if(isString(rejectCallback, true)) {
+            _checkParameter(args[0], rejectCallback);
+        }
 
         return new Promise((resolve, reject) => {
             try {
-                const result = {
+                type Result = {
+                    current: Nullable<HTMLIFrameElement>
+                }
+                const result: Result = {
                     current: null
                 };
 
-                const callback = (args[0][resolveCallback]);
+                const callback: Function = (args[0][resolveCallback]);
                 args[0][resolveCallback] =
                     typeof (callback) === 'function'
                         ? function () {
@@ -442,7 +441,7 @@ const callbackFuncToAsync = function (fn, resolveCallback, rejectCallback) {
                             resolve(result.current);
                         }
 
-                result.current = embedIframe.apply(null, args);
+                result.current = fn.apply(null, args);
             }
             catch (e) {
                 reject(e);
@@ -451,18 +450,18 @@ const callbackFuncToAsync = function (fn, resolveCallback, rejectCallback) {
     }
 };
 
-const ANIMATION_FALLBACK_TIMEOUT = 1000;
+const ANIMATION_FALLBACK_TIMEOUT: number = 1000;
 
-const cssTransitionBasedAnimate = function(node, beforeClass, animationClass) {
+const cssTransitionBasedAnimate = function(node: HTMLElement, beforeClass: string, animationClass: string) : Promise<void> {
 
     return new Promise((resolve, reject) => {
         const displayValue = node.style.display === 'none' ? 'block' : 'none';
 
-        let fallbackTimeout = setTimeout(() => {
+        let fallbackTimeout: number | undefined = setTimeout(() => {
             resolve();
         }, ANIMATION_FALLBACK_TIMEOUT);
 
-        const onTransitionEnd = function (e) {
+        const onTransitionEnd = function () {
 
             clearTimeout(fallbackTimeout);
 
@@ -496,7 +495,7 @@ const cssTransitionBasedAnimate = function(node, beforeClass, animationClass) {
     });
 };
 
-const safeJSONParse = function (str) {
+const safeJSONParse = function (str: Nullable<string>): Nullable<Record<string, any>> {
     if (typeof (str) !== 'string') {
         return str;
     }
@@ -510,23 +509,23 @@ const safeJSONParse = function (str) {
     }
 }
 
-function isSafari() {
-    const ua = navigator.userAgent;
-    const isSafariBrowser =
+function isSafari(): boolean {
+    const ua: string = navigator.userAgent;
+    const isSafariBrowser: boolean =
         /Safari/.test(ua) && !/Chrome/.test(ua) && !/Chromium/.test(ua);
     return isSafariBrowser;
 }
 
 
-const isMobileScreenMq = getComputedStyle(document.documentElement).getPropertyValue("--is-mobile-screen-mq").trim();
-function isMobileScreen() {
+const isMobileScreenMq: string = getComputedStyle(document.documentElement).getPropertyValue("--is-mobile-screen-mq").trim();
+function isMobileScreen(): boolean {
     return window.matchMedia(isMobileScreenMq).matches;
 }
 
-let _touchDevice = null;
-const isTouchDevice = function() {
-    if(_touchDevice === null) {
-        const mq = getComputedStyle(document.documentElement)
+let _touchDevice!: boolean;
+const isTouchDevice = function(): boolean {
+    if(_touchDevice === undefined) {
+        const mq: string = getComputedStyle(document.documentElement)
             .getPropertyValue("--is-touch-device-mq")
             .trim();
 
@@ -536,46 +535,93 @@ const isTouchDevice = function() {
     return _touchDevice;
 }
 
-let preferAnimation = null;
+let preferAnimation:Nullable<boolean> = null;
 
-function checkReducedMotionPreference() {
+function checkReducedMotionPreference(): void {
     if (window.matchMedia) {
         const mediaQueryList = window.matchMedia('(prefers-reduced-motion: reduce)');
         preferAnimation = !mediaQueryList.matches;
 
         mediaQueryList.addEventListener('change', (event) => {
             preferAnimation = !event.matches;
-            console.info('somebody change preferAnimation', preferAnimation);
         });
     }
 }
 
-const animationPreference = function() {
+const animationPreference = function(): boolean {
     if(preferAnimation === null) {
         checkReducedMotionPreference();
     }
 
-    return preferAnimation;
+    return Boolean(preferAnimation);
 }
 
-const singletonPromise = function(fn) {
-    let currentPromise = null;
+const dedupePromise = function<F extends (...args: any[]) => Promise<any>>(fn: F, once: boolean = false): F {
+    let currentPromise: Nullable<Promise<any>> = null;
+    let isResolved: boolean = false;
+    let promiseResult: unknown;
 
-    return function (...args) {
-        if (!currentPromise) {
-            const tempPromise = fn.apply(this, args);
-            if(! (tempPromise instanceof Promise)) {
-                throw new Error('Function must return a Promise');
+    return function (this: any, ...args: Parameters<F>): ReturnType<F> {
+        if (! currentPromise) {
+
+            if(once && isResolved) {
+                return Promise.resolve(promiseResult) as ReturnType<F>;
             }
 
-            currentPromise = tempPromise
+            const result: Promise<any> = fn.apply(this, args);
+
+            if(result instanceof Promise) {
+                currentPromise = result;
+            }
+            else {
+                currentPromise = new Promise((resolve) => {
+                    resolve(result);
+                });
+            }
+
+            result
+                .then((result: unknown) => {
+                    if (once) {
+                        isResolved = true;
+                        promiseResult = result;
+                    }
+
+                    return result;
+                })
                 .finally(() => {
                     currentPromise = null;
                 });
         }
-        return currentPromise;
-    };
+
+        return currentPromise as ReturnType<F>;
+    } as unknown as F;
 }
+
+type CallbackFunction<T1 = void> = (value: T1 | PromiseLike<T1>) => void;
+
+export type PromiseWithResolve<T> = {
+    promise: Promise<T>;
+    resolve: CallbackFunction<T>;
+    reject: CallbackFunction<any>;
+};
+
+const promiseWithResolversPolyfill = function <T = any>(): PromiseWithResolve<T> {
+    let resolve!: CallbackFunction<T>;
+    let reject!: CallbackFunction<any>;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+const promiseWithResolve = function <T = any>(): PromiseWithResolve<T> {
+    if (typeof Promise.withResolvers === 'function') {
+        return Promise.withResolvers<T>();
+    }
+
+    return promiseWithResolversPolyfill<T>();
+};
 
 const asyncEmbedIframe = callbackFuncToAsync(embedIframe, 'onload', 'onerror');
 
@@ -598,12 +644,12 @@ export {
     safeJSONParse,
     transitionEnd,
     compartmentalizeCssValue,
-    sanitizeOnMessageEvent,
     parseClassNames,
     embedIframe,
     cssTransitionBasedAnimate,
     iframeRPC,
     asyncEmbedIframe,
     animationPreference,
-    singletonPromise
+    dedupePromise,
+    promiseWithResolve
 }

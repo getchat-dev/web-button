@@ -1,4 +1,4 @@
-import createButton from '@/createButton';
+import createButton from '@/createButton.js';
 import Chat from '@/Chat';
 import deviceDetector from '@/deviceDetector';
 

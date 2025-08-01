@@ -7,6 +7,5 @@ let env;
 
 export default defineConfig(async ({ command, mode }) => {
     env = loadEnv(mode, process.cwd(), '');
-
-    return await buildConfig(resolve(__dirname, 'src/browser.js'), env);
+    return await buildConfig(resolve(__dirname, 'src/browser.js'), env, mode);
 })

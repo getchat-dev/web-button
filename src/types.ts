@@ -2,7 +2,7 @@ export interface ChatOptions {
     /**
      * The unique identifier for the chat instance.
      */
-    id: string;
+    id?: string;
     /**
      * The URL of the chat service.
      * If the node parameter is an HTMLIframeElement, the src attribute of the iframe will be used as the chat URL.
@@ -30,7 +30,7 @@ export interface ChatOptions {
      * This should be a record of CSS properties and values.
      * default: { width: '100%', height: '100%' }
      */
-    nodeStyle: Record<string, string>;
+    nodeStyle?: Record<string, string>;
 
     /**
      * Callback function to call before the chat is loaded.
@@ -41,12 +41,22 @@ export interface ChatOptions {
     /**
      * Callback function to call when the chat is loaded.
      */
-    onLoaded?: () => void;
+    onLoaded?: (iframe?: HTMLIFrameElement | null) => void;
+
+    /**
+     * Smart handle opening/closing keyboard on touch devices.
+     */
+    handleKeyboardOnTouchDevices?: boolean;
 }
 
-export type NotificationPermissionResult = {
-    status: "granted" | "denied" | "default" | "unsupported";
-    token: string | null;
+export type NotificationPermissionStatus = "granted" | "denied" | "default" | "unsupported";
+
+export type BrowserNotificationPermissionAndToken = {
+    status: NotificationPermissionStatus;
+    token: Nullable<string>;
+};
+
+export type NotificationPermissionResult = BrowserNotificationPermissionAndToken & {
     persisted?: boolean;
 };
 
@@ -57,31 +67,17 @@ export type Notification = {
 }
 
 export type InitWebPushNotificationsOptions = {
-    onNotificationClicked?: (event: NotificationEvent) => void;
-    iosStandalonePWALink: string | null;
+    onNotificationClicked?: (event: MessageEvent) => void;
+    iosStandalonePWALink?: string | null;
     welcomeMessage?: Notification;
 }
 
-export declare class Chat {
-    constructor(options: ChatOptions);
-
-    whenReady(): Promise<void>;
-
-    load(showLoader?: boolean): Promise<void>;
-
-    isLoaded(): boolean;
-
-    addEventListener(event: string, listener: EventListenerOrEventListenerObject): void;
-
-    getChatNode(): HTMLElement | null;
-
-    getChatIframeNode(): HTMLElement | null;
-
-    rpc(method: string, params: any[], timeout?: number): Promise<any>;
-
-    initWebPushNotifications(options?: InitWebPushNotificationsOptions): Promise<NotificationPermissionResult>;
-
-    requestNotificationPermission(event?: MouseEvent | PointerEvent): Promise<NotificationPermissionResult>;
-
-    disableNotifications(): Promise<boolean>;
+export type UnreadSummary = {
+    chats: {
+        [chatId: string]: number; // always > 0 (by convention)
+    };
+    total: {
+        messages: number;
+        chats: number;
+    };
 }

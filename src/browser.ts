@@ -1,6 +1,7 @@
 import createButton from '@/createButton';
 import deviceDetector from '@/deviceDetector';
 import Chat from '@/Chat';
+import GetchatButton from '@/GetchatButton';
 
 (function (w) {
 
@@ -13,6 +14,7 @@ import Chat from '@/Chat';
         deviceDetector,
         createButton,
         Messenger: Chat,
+        GetchatButton,
         Chat
     };
 
@@ -27,4 +29,5 @@ import Chat from '@/Chat';
     if(Object.freeze) {
         Object.freeze(w[__JS_GLOBAL_SCOPE__])
     }
+
 })(window);

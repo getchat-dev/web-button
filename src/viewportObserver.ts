@@ -1,21 +1,24 @@
 import onMessage from "@/onMessage";
 import { isTouchDevice } from '@/utils';
 
-const nodes = new Set();
+const nodes: Set<HTMLElement> = new Set();
 
-const handlingNode = new Map();
-
-let DelayedVKResizeHandler = null;
+const handlingNode: Map<Window, { action: string, timestamp: number }> = new Map();
 
 let isInited = false;
 
-const initVirtualkeyboardAPI = function() {
-    navigator.virtualKeyboard.overlaysContent = true;
+/*const initVirtualKeyboardAPI = function() {
+    const vkeyboard = (navigator as any).virtualKeyboard;
+    if(! vkeyboard) {
+        return;
+    }
 
-    lastVKHeight = null;
+    vkeyboard.overlaysContent = true;
 
-    navigator.virtualKeyboard.addEventListener('geometrychange', (event) => {
-        const { x, y, width, height } = event.target.boundingRect;
+    let lastVKHeight: number | null = null;
+
+    vkeyboard.addEventListener('geometrychange', (event: Event) => {
+        const { x, y, width, height } = (event.target as any).boundingRect;
 
         if(lastVKHeight === height) {
             return;
@@ -24,13 +27,14 @@ const initVirtualkeyboardAPI = function() {
         for(const $node of nodes) {
             const _lastViewport = Object.assign({}, lastViewport);
             setTimeout(() => {
-                handleNode($node, _lastViewport, newViewport);
+                const handleNode = () => {}
+                (handleNode as any)($node, _lastViewport, newViewport);
             }, 0);
         }
 
         lastVKHeight = height;
     });
-}
+}*/
 
 const init = function() {
 
@@ -48,29 +52,33 @@ const init = function() {
 
     let lastViewport = {height: window.visualViewport.height, width: window.visualViewport.width};
 
-    const handleNode = function(event, $node, oldViewport, newViewport) {
+    const handleNode = function(event: Event, $node: HTMLElement, oldViewport: {height: number, width: number}, newViewport: {height: number, width: number}) {
 
         const now = Date.now();
         const $iframe = $node.querySelector('iframe');
+
+        if(! $iframe || ! $iframe.contentWindow) {
+            return;
+        }
 
         if(! handlingNode.has($iframe?.contentWindow)) {
             return;
         }
 
         // DELAY is different for focus and unfocus, the time after unfocus event and triggering resize event is longer
-        let DELAY = handlingNode.get($iframe?.contentWindow).action === 'unfocus' ? 1000 : 300;
+        let DELAY = handlingNode.get($iframe.contentWindow)?.action === 'unfocus' ? 1000 : 300;
 
-        if((now - handlingNode.get($iframe?.contentWindow).timestamp) > DELAY) {
+        if((now - (handlingNode.get($iframe.contentWindow)?.timestamp ?? 0)) > DELAY) {
             // for scroll event and focus state
-            if(event.type === 'scroll' && handlingNode.get($iframe?.contentWindow).action === 'focus') {
-                $node.style.setProperty('--chat-node-top-offset', `${window.visualViewport.pageTop}px`);
+            if(event.type === 'scroll' && handlingNode.get($iframe.contentWindow)?.action === 'focus') {
+                $node.style.setProperty('--chat-node-top-offset', `${(window.visualViewport as any).pageTop}px`);
             }
 
             return;
         }
 
         // in case of unfocus
-        if(handlingNode.get($iframe?.contentWindow).action === 'unfocus') {
+        if(handlingNode.get($iframe.contentWindow)?.action === 'unfocus') {
             $node.style.removeProperty('--chat-node-top-offset');
             $node.style.removeProperty('--chat-node-height');
             return;
@@ -87,11 +95,11 @@ const init = function() {
     }
 
     window.visualViewport.addEventListener('resize', (e) => {
-        if(lastViewport.height === window.visualViewport.height) {
+        if(lastViewport.height === (window.visualViewport as any).height) {
             return;
         }
 
-        const newViewport = {height: window.visualViewport.height, width: window.visualViewport.width};
+        const newViewport = {height: (window.visualViewport as any).height, width: (window.visualViewport as any).width};
 
         for(const $node of nodes) {
             const _lastViewport = Object.assign({}, lastViewport);
@@ -116,37 +124,41 @@ const init = function() {
     let _onscroll = null;
     let onScrollBindingTimeout = null;*/
 
-    onMessage('getchat.input.focused', function (event, data) {
-        handlingNode.set(event.source.window, {
-            action: 'focus',
-            timestamp: Date.now()
-        });
+    onMessage('getchat.input.focused', function (event: MessageEvent, data: any) {
+        if(event.source && 'window' in event.source) {
+            handlingNode.set(event.source.window, {
+                action: 'focus',
+                timestamp: Date.now()
+            });
 
-        /*onScrollBindingTimeout = setTimeout(() => {
-            if(typeof _onscroll !== 'function') {
-                _onscroll = onscroll.bind(event.source.window);
-                window.addEventListener('scroll', _onscroll);
-            }
-        }, 500);*/
+            /*onScrollBindingTimeout = setTimeout(() => {
+                if(typeof _onscroll !== 'function') {
+                    _onscroll = onscroll.bind(event.source.window);
+                    window.addEventListener('scroll', _onscroll);
+                }
+            }, 500);*/
+        }
     });
 
-    onMessage('getchat.input.unfocused', function (event, data) {
-        handlingNode.set(event.source.window, {
-            action: 'unfocus',
-            timestamp: Date.now()
-        });
+    onMessage('getchat.input.unfocused', function (event: MessageEvent, data: unknown) {
+        if(event.source && 'window' in event.source) {
+            handlingNode.set(event.source.window, {
+                action: 'unfocus',
+                timestamp: Date.now()
+            });
 
-        /*clearTimeout(onScrollBindingTimeout);
-        if(typeof _onscroll === 'function') {
-            window.visualViewport.removeEventListener('scroll', _onscroll);
-            _onscroll = null;
-        }*/
+            /*clearTimeout(onScrollBindingTimeout);
+            if(typeof _onscroll === 'function') {
+                window.visualViewport.removeEventListener('scroll', _onscroll);
+                _onscroll = null;
+            }*/
+        }
     });
 
     isInited = true;
 }
 
-const startObservViewport = function($node) {
+const startObservViewport = function($node: HTMLElement) {
     if($node instanceof Element) {
         if(! isInited) {
             init();
@@ -156,7 +168,7 @@ const startObservViewport = function($node) {
     }
 }
 
-const finishObservViewport = function($node) {
+const finishObservViewport = function($node: HTMLElement) {
     if($node instanceof Element) {
         nodes.delete($node);
     }

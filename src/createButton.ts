@@ -1,15 +1,134 @@
-import { uuid, addClassName, unescapeHTML, compartmentalizeCssValue, isPlainObject, parseClassNames } from '@/utils'
+import {
+    uuid,
+    addClassName,
+    unescapeHTML,
+    compartmentalizeCssValue,
+    isPlainObject,
+    parseClassNames
+} from '@/utils';
+
 import escapeHandler from '@/escapeHandler';
 
-import GetchatButton from '@/GetchatButton';
+import { supportedAttributes } from '@/GetchatButton';
 
 import Chat from '@/Chat';
 
+import type GetchatButton from '@/GetchatButton';
+import type { SupportedAttribute } from '@/GetchatButton';
+import type { CompartmentalizedCssValue } from '@/utils';
+
 import styles from '@/outer.module.css';
+
+interface CreateButtonOptions {
+    /**
+     * The URI for the chat service.
+     */
+    uri?: string;
+    /**
+     * The class name to apply to the button.
+     */
+    className?: Nullable<string>;
+    /**
+     * Whether to show unread messages count.
+     * Can be a boolean, or specify 'messages' or 'chats' for type of unread.
+     */
+    showUnread?: boolean | 'messages' | 'chats';
+    /**
+     * Whether to autoload the chat.
+     * @default false
+     */
+    autoload?: boolean;
+    /**
+     * Show loader on the button while chat is loading.
+     * @default false
+     */
+    autoloadLoader?: boolean;
+    /**
+     * Automatically open the chat widget.
+     * Set to "once" to open only the first time.
+     * @default false
+     */
+    autoopen?: boolean | 'once';
+    /**
+     * Delay in milliseconds before auto-open.
+     * @default 5000
+     */
+    autoopenDelay?: number;
+    /**
+     * Whether to close chat on escape press.
+     * @default true
+     */
+    closeOnEscape?: boolean;
+    /**
+     * Maximum width in pixels to enable mobile mode.
+     * Useful for responsive design.
+     */
+    mobileModeMaxWidth?: number;
+    /**
+     * Background color of the button.
+     */
+    bgcolor?: string;
+    /**
+     * Border radius of the button (e.g. '8px').
+     */
+    bdradius?: string;
+    /**
+     * Border width of the button (e.g. '1px').
+     */
+    bdwidth?: string;
+    /**
+     * Border color of the button.
+     */
+    bdcolor?: string;
+    /**
+     * Color of badge on the button.
+     */
+    badgecolor?: string;
+    /**
+     * Background color of badge on the button.
+     */
+    badgebg?: string;
+    /**
+     * Text color of the button.
+     */
+    color?: string;
+    /**
+     * The HTML element to insert the button into, or a function returning the element.
+     */
+    insertButtonTo?: Nullable<HTMLElement | (() => HTMLElement)>;
+    /**
+     * Custom styles to apply to the button.
+     */
+    buttonStyle?: Partial<CSSStyleDeclaration>;
+    /**
+     * Class name to apply to the chat window.
+     */
+    chatClassName?: string;
+    /**
+     * The parent HTML element for the chat window.
+     */
+    chatParent?: HTMLElement | null;
+    /**
+     * Custom styles to apply to the chat window.
+     */
+    chatStyle?: Partial<CSSStyleDeclaration>;
+    /**
+     * The HTML element representing the chat node.
+     */
+    chatNode?: HTMLElement | null;
+    /**
+     * The HTML element representing the node (for backward compatibility).
+     */
+    node?: HTMLElement | null;
+    /**
+     * [For additional, custom options]
+     */
+    [key: string]: any; // For additional options
+}
 
 /**
  * Options for creating a chat button.
- * 
+ *
  * @typedef {Object} CreateButtonOptions
  * @property {string} [uri] - The URI for the chat service.
  * @property {string} [className] - The class name to apply to the button.
@@ -52,7 +171,7 @@ export default async function ({
     chatStyle,
     chatNode,
     ...options
-}) {
+}: CreateButtonOptions): Promise<HTMLElement> {
     const id = (__JS_GLOBAL_SCOPE__).toLowerCase() + uuid();
 
     if (typeof insertButtonTo === 'function') {
@@ -68,7 +187,7 @@ export default async function ({
         insertButtonTo = document.body;
     }
 
-    const button = document.createElement('getchat-button');
+    const button: GetchatButton = document.createElement('getchat-button') as GetchatButton;
     button.id = id;
 
     if (!className) {
@@ -83,11 +202,9 @@ export default async function ({
         Object.assign(button.style, buttonStyle);
     }
 
-    if (GetchatButton.supportedAttributes?.length) {
-        for (let attr of GetchatButton.supportedAttributes) {
-            if (options[attr]) {
-                button.setAttribute('data-'+attr, options[attr]);
-            }
+   for (let attr of supportedAttributes as unknown as SupportedAttribute[]) {
+        if (options[attr]) {
+            button.setAttribute('data-'+attr, options[attr]);
         }
     }
 
@@ -95,8 +212,8 @@ export default async function ({
         button.setAttribute('data-show-unread', showUnread === true ? 'messages' : showUnread);
     }
 
-    let beforeOpenTopScroll;
-    let beforeOpenBodyPositionProperty;
+    let beforeOpenTopScroll: number | undefined;
+    let beforeOpenBodyPositionProperty: string | undefined;
     let thingsForChatMode = false;
 
     button.addCallback('onBeforeOpen', function() {
@@ -109,7 +226,7 @@ export default async function ({
 
     button.addCallback('onAfterOpen', function() {
         if (thingsForChatMode) {
-            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
             document.body.style.position = 'fixed';
         }
 
@@ -126,7 +243,7 @@ export default async function ({
             }
 
             if (beforeOpenTopScroll) {
-                window.scrollTo({ top: beforeOpenTopScroll, left: 0, behavior: 'instant' });
+                window.scrollTo({ top: beforeOpenTopScroll, left: 0, behavior: 'instant' as ScrollBehavior });
             }
         }
 
@@ -138,7 +255,6 @@ export default async function ({
     });
 
     const initChat = () => {
-
         // prepare the chat container
         let doesElementOnPage = true;
         if (!(chatNode instanceof HTMLElement)) {
@@ -146,10 +262,10 @@ export default async function ({
             doesElementOnPage = false;
         }
 
-        chatNode.className = styles['chat']
+        chatNode.className = styles['chat'];
 
         if (chatClassName) {
-            addClassName(chatNode, parseClassNames(chatClassName));
+            addClassName(chatNode, parseClassNames(chatClassName)!);
         }
 
         if (isPlainObject(chatStyle)) {
@@ -166,9 +282,9 @@ export default async function ({
         // end prepare the chat container
 
         const chat = new Chat({
-            url: unescapeHTML(uri),
+            url: unescapeHTML(uri) as string,
             node: chatNode,
-            handleKeyboardOnTouchDevices: false,
+            handleKeyboardOnTouchDevices: true,
 
             onLoaded: function () {
                 // exactly here, on loading and before opening.
@@ -181,27 +297,27 @@ export default async function ({
 
                 const chatNode = chat.getChatNode();
                 if (chatNode) {
-                    let { position, top, bottom } = getComputedStyle(chatNode);
+                    let { position, top, bottom } = getComputedStyle(chatNode) as CSSStyleDeclaration;
 
-                    const newStyle = {}
+                    const newStyle: Partial<CSSStyleDeclaration> = {};
 
                     requestAnimationFrame(() => {
                         // if our chat is inside the element with a positional fix.
                         // we need to calculate the height intelligently
                         if (position === 'fixed') {
 
-                            bottom = compartmentalizeCssValue(bottom, 'auto');
-                            top = compartmentalizeCssValue(top, 'auto');
+                            const oBottom: CompartmentalizedCssValue | string = compartmentalizeCssValue(bottom, 'auto') as CompartmentalizedCssValue | string;
+                            const oTop: CompartmentalizedCssValue | string = compartmentalizeCssValue(top, 'auto') as CompartmentalizedCssValue | string;
 
-                            if (bottom !== 'auto' && bottom?.value) {
-                                if (top === 'auto') {
-                                    newStyle.top = bottom.value + bottom.unit;
+                            if (oBottom !== 'auto' && (oBottom as CompartmentalizedCssValue)?.value) {
+                                if (oTop === 'auto') {
+                                    newStyle.top = (oBottom as CompartmentalizedCssValue).value + (oBottom as CompartmentalizedCssValue).unit;
                                     newStyle.height = 'auto';
                                 }
                             }
-                            else if(top !== 'auto' && top.value) {
-                                if (bottom === 'auto') {
-                                    newStyle.bottom = top.value + top.unit;
+                            else if(oTop !== 'auto' && (oTop as CompartmentalizedCssValue)?.value) {
+                                if (oBottom === 'auto') {
+                                    newStyle.bottom = (oTop as CompartmentalizedCssValue).value + (oTop as CompartmentalizedCssValue).unit;
                                     newStyle.height = 'auto';
                                 }
                             }
@@ -228,9 +344,7 @@ export default async function ({
         button.setChatInstance(chat);
         button.loadChat(autoloadLoader);
 
-        chat.addEventListener('getchat.close', function (data) {
-            button.closeChat();
-        });
+        chat.addEventListener('getchat.close', button.closeChat);
 
         return chat;
     }

@@ -2,12 +2,22 @@
  * @fileoverview Utility functions for detecting OS and Browser information.
  */
 
+type DeviceInfo = {
+    os: string;
+    browser: {
+        name: string;
+        version: string;
+    };
+    isStandalone: boolean;
+    apiUsed: string;
+}
+
 /**
  * A private variable to store the cached device information.
  * It will be null until the first call to detectDevice().
  * @type {Object|null}
  */
-let _cachedDeviceInfo = null;
+let _cachedDeviceInfo: DeviceInfo | null = null;
 
 /**
  * Detects the Operating System, Browser information, and Standalone mode status.
@@ -25,7 +35,7 @@ let _cachedDeviceInfo = null;
  * - isStandalone: A boolean indicating if the app is running in standalone mode (e.g., PWA, iOS Home Screen app).
  * - apiUsed: The API used for detection ('User-Agent Client Hints' or 'User-Agent String').
  */
-export default function detectDevice() {
+export default function detectDevice(): DeviceInfo {
     // If device information is already cached, return it immediately.
     if (_cachedDeviceInfo) {
         return _cachedDeviceInfo;
@@ -43,19 +53,20 @@ export default function detectDevice() {
     // matchMedia is for general PWA standalone display mode
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
         isStandalone = true;
-    } else if (navigator.standalone) { // Deprecated but still relevant for older iOS
+    }
+    else if ((navigator as any).standalone) {
         isStandalone = true;
     }
 
 
     // Check if User-Agent Client Hints API is available
-    if (navigator.userAgentData) {
+    if ((navigator as any).userAgentData) {
         // --- Using User-Agent Client Hints (Low-Entropy) ---
         apiUsed = 'User-Agent Client Hints';
 
         // 1. Detect Operating System using platform
         // Convert platform to lowercase for consistent comparison
-        const platformLower = navigator.userAgentData.platform.toLowerCase();
+        const platformLower = (navigator as any).userAgentData.platform.toLowerCase();
 
         if (platformLower === 'macos') {
             os = 'macOS';
@@ -72,7 +83,7 @@ export default function detectDevice() {
         }
 
         // 2. Detect Browser using brands array
-        const brands = navigator.userAgentData.brands;
+        const brands = (navigator as any).userAgentData.brands;
         if (brands && brands.length > 0) {
             let foundBrowser = false;
             for (const brand of brands) {

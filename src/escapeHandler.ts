@@ -1,6 +1,6 @@
-let stack = [];
+let stack: Array<() => void> = [];
 
-const keyHandler = function(e) {
+const keyHandler = function(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
         const handler = stack.pop();
 
@@ -15,7 +15,7 @@ const keyHandler = function(e) {
 };
 
 export default {
-    bind: function(handler) {
+    bind: function(handler: () => void): void {
         if(typeof(handler) === 'function') {
             stack.push(handler)
         }
@@ -24,7 +24,7 @@ export default {
             document.addEventListener('keydown', keyHandler);
         }
     },
-    unbind: function(handler) {
+    unbind: function(handler: () => void): void {
         if(typeof(handler) === 'function') {
             stack = stack.filter(func => func !== handler);
         }

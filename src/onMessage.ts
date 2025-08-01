@@ -1,23 +1,20 @@
-let _events = {};
+import { safeJSONParse, isPlainObject } from './utils';
 
-window.addEventListener('message', function (e) {
-    var data = {};
+let _events: Record<string, Function[]> = {};
+
+window.addEventListener('message', function (e: MessageEvent): void {
+    var data: Record<string, any> | null = {};
 
     if(e.data) {
         if(typeof(e.data) === 'string') {
-            try {
-                data = JSON.parse(e.data);
-            }
-            catch(error) {
-                return;
-            }
+            data = safeJSONParse(e.data)!;
         }
         else {
             data = e.data;
         }
     }
 
-    if (data.type) {
+    if (data?.type) {
         if (Array.isArray(_events?.[data.type]) && _events[data.type].length) {
             _events[data.type] = _events[data.type].filter(handler => {
                 try {
@@ -31,7 +28,7 @@ window.addEventListener('message', function (e) {
     }
 });
 
-const addHandler = function (key, handler) {
+const addHandler = function (key: string, handler: Function) {
     if(typeof(key) === 'string' && typeof(handler) === 'function') {
         if(!_events.hasOwnProperty(key)) {
             _events[key] = [];
@@ -41,13 +38,13 @@ const addHandler = function (key, handler) {
     }
 }
 
-export default function(...args) {
-    let events = {};
+export default function(...args: unknown[]): void {
+    let events: Record<string, Function[]> = {};
 
     // we have a smart function that can be passed to as a single object
     // onMessage({'EventName': () => {}, 'EventName2': [() => {}, () => {}]});
     if (args.length === 1) {
-        if(typeof(args[0]) === 'object' && Object.prototype.toString.call(args[0]) === '[object Object]') {
+        if(isPlainObject(args[0])) {
             events = args[0];
         }
     }
@@ -68,9 +65,9 @@ export default function(...args) {
                 for(let i = 0, end = callbacks.length; i < end; i++) {
                     if (typeof (callbacks[i]) === 'function') {
                         if (sourceFrame) {
-                            const fn = callbacks[i];
-                            callbacks[i] = function (event, data) {
-                                if (sourceFrame.contentWindow === event.source.window) {
+                            const fn: Function = callbacks[i];
+                            callbacks[i] = function (event: MessageEvent, data: Record<string, any> | null): unknown {
+                                if (event.source && 'window' in event.source && sourceFrame.contentWindow === event.source?.window) {
                                     return fn(event, data);
                                 }
                             }

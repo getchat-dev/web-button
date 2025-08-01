@@ -1,18 +1,42 @@
-import { addClassName, getAttr, removeClassName, toDecimal, cssTransitionBasedAnimate, singletonPromise, dispatchEvent } from '@/utils';
+import {
+    addClassName,
+    getAttr,
+    removeClassName,
+    toDecimal,
+    cssTransitionBasedAnimate,
+    dedupePromise
+} from '@/utils';
 import { startObservViewport, finishObservViewport } from '@/viewportObserver';
 import Chat from '@/Chat';
 
+import type { UnreadSummary } from '@/types';
+
 import styles from '@/outer.module.css';
 
-const transformAttributeToCss = function (node, attrbite, type) {
-    let value = getAttr(node, attrbite, type);
+type AttributeType = 'string' | 'number' | 'boolean';
+type State = 'loaded' | 'loading';
 
-    if (value) {
-        node.style.setProperty(`--${attrbite.replace('data-', '')}`, value);
-    }
+type CallbackMap = {
+    [name: string]: Array<Function>;
 }
 
-const supportedAttributes = ['bgcolor', 'color', 'bdradius', 'bdwidth', 'bdcolor', 'badgebg', 'badgecolor'];
+type SetChatInstanceOptions = {
+    /**
+     * If true, the chat will toggle(open/close) on click.
+     * default: true
+     */
+    toggleOnClick?: boolean;
+}
+
+const transformAttributeToCss = (node: HTMLElement, attribute: string, type: AttributeType) => {
+    let value = getAttr(node, attribute, type);
+    if (value) {
+        node.style.setProperty(`--${attribute.replace('data-', '')}`, value as any);
+    }
+};
+
+export const supportedAttributes = ['bgcolor', 'color', 'bdradius', 'bdwidth', 'bdcolor', 'badgebg', 'badgecolor'] as const;
+export type SupportedAttribute = typeof supportedAttributes[number];
 
 const defaultIcon = `
 <svg class="button-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
@@ -21,7 +45,7 @@ const defaultIcon = `
 </svg>
 `;
 
-const validateSvg = function (svg) {
+const validateSvg = (svg: string): boolean => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, 'image/svg+xml');
 
@@ -30,51 +54,56 @@ const validateSvg = function (svg) {
     }
 
     return true;
-}
+};
 
-const validateUrl = function (url) {
-    if(! window.URL) {
+const validateUrl = (url: string): boolean => {
+    if (!(window as any).URL) {
         // URL is not supported, but i don't want to throw an error
         return true;
     }
-
-    const parsed = URL.parse(url);
-    if(parsed) {
-        if(! (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
+    try {
+        const parsed = new URL(url);
+        if (!(parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
             return false;
         }
-        if(parsed.pathname === '' && parsed.searchParams.size < 1) {
+        if (parsed.pathname === '' && parsed.searchParams.size < 1) {
             return false;
         }
-
         return true;
+    } catch {
+        return false;
     }
+};
 
-    return false;
-}
+const registeredCallbacks = ['onBeforeOpen', 'onAfterOpen', 'onBeforeClose', 'onAfterClose'] as const;
+type CallbackName = typeof registeredCallbacks[number];
 
-const registeredCallbacks = ['onBeforeOpen', 'onAfterOpen', 'onBeforeClose', 'onAfterClose'];
 export default class GetchatButton extends HTMLElement {
+    static supportedAttributes = supportedAttributes;
 
-    #chatInstance;
-    #rendered = false;
-    #observer;
-    #icon = defaultIcon;
+    #chatInstance: Nullable<Chat> = null;
+    #rendered: boolean = false;
+    #observer!: MutationObserver;
+    #icon: string = defaultIcon;
 
-    #isChatOpened = false;
-    #animationState = false;
+    #isChatOpened: boolean = false;
+    #animationState: boolean = false;
 
-    #callbacks = {};
+    #callbacks: CallbackMap = {};
+
+    loadChat: (showLoader?: boolean) => Promise<Chat | void>;
+    toggleChat: () => Promise<void>;
+    openChat: () => Promise<void>;
+    closeChat: () => Promise<void>;
 
     constructor() {
         super();
-
         this.attachShadow({ mode: 'open' });
 
-        this.loadChat = singletonPromise(this.#loadChat.bind(this));
-        this.toggleChat = singletonPromise(this.#toggleChat.bind(this));
-        this.openChat = singletonPromise(this.#openChat.bind(this));
-        this.closeChat = singletonPromise(this.#closeChat.bind(this));
+        this.loadChat = dedupePromise(this.#loadChat.bind(this), true);
+        this.toggleChat = dedupePromise(this.#toggleChat.bind(this));
+        this.openChat = dedupePromise(this.#openChat.bind(this));
+        this.closeChat = dedupePromise(this.#closeChat.bind(this));
     }
 
     connectedCallback() {
@@ -82,22 +111,22 @@ export default class GetchatButton extends HTMLElement {
 
         supportedAttributes.forEach(attr => {
             if (this.hasAttribute('data-' + attr)) {
-                transformAttributeToCss(this, 'data-'+attr, 'string');
+                transformAttributeToCss(this, 'data-' + attr, 'string');
             }
         });
 
-        // add listeners to listen changing attrivutes
-        this.#observer = new MutationObserver((mutationsList) => {
+        // add listeners to listen changing attributes
+        this.#observer = new MutationObserver((mutationsList: MutationRecord[]) => {
             for (let mutation of mutationsList) {
                 if (mutation.type === 'attributes') {
                     // check if it is data attribute remove data-
-                    let attrName = mutation.attributeName;
+                    let attrName = mutation.attributeName || '';
                     if (attrName.startsWith('data-')) {
                         attrName = attrName.replace('data-', '');
                     }
 
-                    if (supportedAttributes.includes(attrName.replace('data-', ''))) {
-                        transformAttributeToCss(this, mutation.attributeName, 'string');
+                    if (supportedAttributes.includes(attrName.replace('data-', '') as SupportedAttribute)) {
+                        transformAttributeToCss(this, mutation.attributeName!, 'string');
                     }
                 }
             }
@@ -110,22 +139,25 @@ export default class GetchatButton extends HTMLElement {
         this.#observer.disconnect();
     }
 
-    setChatInstance(chatInstance, {toggleOnClick = true} = {}) {
-        if(this.#chatInstance) {
+    setChatInstance(chatInstance: Chat, options: SetChatInstanceOptions = {}) {
+        const { toggleOnClick = true } = options;
+        if (this.#chatInstance) {
             console.error('Chat instance is already set. Use getChatInstance() to access it.');
             return;
         }
-        if(! (chatInstance instanceof Chat)) {
+        if (!(chatInstance instanceof Chat)) {
             console.error('Invalid chat instance provided. It must be an instance of Chat class.');
             return;
         }
 
         this.#chatInstance = chatInstance;
         this.#chatInstance.whenReady().then(() => {
-            const unread = getAttr(this, 'data-show-unread', 'string');
-            if(unread && ['chats', 'messages'].includes(unread)) {
-                this.#chatInstance.rpc('getchat.messenger.getUnreads').then(unreads => {
-                    this.setBadge(unreads?.total?.[unread] ?? 0);
+            const supportedUnreads = ['chats', 'messages'] as const;
+            type SupportedUnreadType = typeof supportedUnreads[number];
+            const unread: Nullable<SupportedUnreadType> = getAttr(this, 'data-show-unread', 'string') as Nullable<SupportedUnreadType>;
+            if (unread && supportedUnreads.includes(unread)) {
+                this.#chatInstance!.rpc('getchat.messenger.getUnreads').then((result: UnreadSummary) => {
+                    this.setBadge(result?.total?.[unread] ?? 0);
                 });
             }
         });
@@ -135,11 +167,11 @@ export default class GetchatButton extends HTMLElement {
         }
     }
 
-    getChatInstance() {
+    getChatInstance(): Nullable<Chat> {
         return this.#chatInstance;
     }
 
-    addCallback(name, callback) {
+    addCallback(name: CallbackName, callback: Function): void {
         if (registeredCallbacks.includes(name) && typeof callback === 'function') {
             if (!this.#callbacks[name]) {
                 this.#callbacks[name] = [];
@@ -148,9 +180,9 @@ export default class GetchatButton extends HTMLElement {
         }
     }
 
-    setState(state) {
+    setState(state: State): void {
+        state = state.toLowerCase() as State;
 
-        state = state.toLowerCase();
         if (state === 'loading') {
             addClassName(this, 'loading');
         }
@@ -158,19 +190,19 @@ export default class GetchatButton extends HTMLElement {
             removeClassName(this, 'loading');
 
             if (state === 'loaded') {
-                this.shadowRoot.querySelector('.loader').remove();
+                this.shadowRoot!.querySelector('.loader')?.remove();
             }
         }
     }
 
-    setBadge(value) {
+    setBadge(value: any): void {
         value = toDecimal(value);
 
-        const badge = this.shadowRoot.querySelector('.unreads');
+        const badge: Nullable<HTMLElement> = this.shadowRoot!.querySelector('.unreads') as Nullable<HTMLElement>;
         if (badge) {
             if (value > 0) {
-                if(value > 999) {
-                    value = Math.floor(value / 1000) + 'K'
+                if (value > 999) {
+                    value = Math.floor(value / 1000) + 'K';
                 }
                 badge.textContent = value;
                 addClassName(badge, 'unreads--visible');
@@ -181,29 +213,28 @@ export default class GetchatButton extends HTMLElement {
         }
     }
 
-    isOpened() {
+    isOpened(): boolean {
         return this.#isChatOpened;
     }
 
-    #loadChat = (showLoader = true) => {
+    #loadChat = (showLoader: boolean = true): Promise<Chat | void> => {
         return new Promise(async (resolve, reject) => {
             if (!this.#chatInstance) {
                 reject('Chat instance is not set');
                 return;
             }
 
-            if(this.#chatInstance.loadingState === 2) {
+            if (this.#chatInstance.loadingState === 2) {
                 resolve();
                 return;
             }
 
             try {
-                if(showLoader) {
+                if (showLoader) {
                     this.setState('loading');
                 }
 
                 await this.#chatInstance.load();
-
                 resolve(this.#chatInstance);
             }
             catch (error) {
@@ -212,7 +243,7 @@ export default class GetchatButton extends HTMLElement {
         });
     }
 
-    #toggleChat() {
+    #toggleChat = (): Promise<void> => {
         return new Promise(async (resolve, reject) => {
 
             if (!this.#chatInstance) {
@@ -220,6 +251,7 @@ export default class GetchatButton extends HTMLElement {
                 return;
             }
 
+            // in case chat is not loaded yet, no action is needed
             if (this.#chatInstance.loadingState !== 2) {
                 resolve();
                 return;
@@ -236,15 +268,15 @@ export default class GetchatButton extends HTMLElement {
         });
     }
 
-    #openChat = () => {
+    #openChat = (): Promise<void> => {
         return new Promise(async (resolve, reject) => {
 
-            if(! this.#chatInstance) {
+            if (!this.#chatInstance) {
                 reject('Chat instance is not set');
                 return;
             }
 
-            if (! this.#chatInstance.isLoaded()) {
+            if (!this.#chatInstance.isLoaded()) {
                 await this.loadChat();
             }
 
@@ -272,8 +304,7 @@ export default class GetchatButton extends HTMLElement {
 
                 await this.#callCallbacks('onAfterOpen', this);
 
-                this.#chatInstance.rpc('getchat.messenger.repaint')
-
+                this.#chatInstance.rpc('getchat.messenger.repaint');
                 startObservViewport(this.#chatInstance.getChatNode());
 
                 this.#animationState = false;
@@ -289,7 +320,7 @@ export default class GetchatButton extends HTMLElement {
         });
     }
 
-    #closeChat = () => {
+    #closeChat = (): Promise<void> => {
         return new Promise(async (resolve, reject) => {
 
             if (!this.#isChatOpened && !this.#animationState) {
@@ -300,17 +331,17 @@ export default class GetchatButton extends HTMLElement {
             try {
                 this.#animationState = true;
 
-                finishObservViewport(this.#chatInstance.getChatNode());
+                finishObservViewport(this.#chatInstance!.getChatNode());
 
                 await this.#callCallbacks('onBeforeClose', this);
 
                 await cssTransitionBasedAnimate(
-                    this.#chatInstance.getChatNode(),
+                    this.#chatInstance!.getChatNode(),
                     styles['chat-animation-opened'],
                     styles['chat-animation-close']
                 );
 
-                removeClassName(this.#chatInstance.getChatNode(), styles['chat-animation-close']);
+                removeClassName(this.#chatInstance!.getChatNode(), styles['chat-animation-close']);
                 removeClassName(this, styles['button-animation-close']);
 
                 await cssTransitionBasedAnimate(
@@ -334,7 +365,7 @@ export default class GetchatButton extends HTMLElement {
         });
     }
 
-    async #callCallbacks(name, ...args) {
+    async #callCallbacks(name: CallbackName, ...args: any[]): Promise<void> {
         const callbacks = this.#callbacks[name] || [];
         try {
             for (const callback of callbacks) {
@@ -346,22 +377,9 @@ export default class GetchatButton extends HTMLElement {
         }
     }
 
-    #setCustomIcon(icon) {
-        if(this.#rendered) {
-            const $node = this.shadowRoot.querySelector('.button-icon');
-            if($node && $node instanceof HTMLElement) {
-                $node.innerHTML = icon;
-            }
-        }
-        else {
-            this.#icon = icon;
-        }
-    }
-
-    setCustomIcon(icon, catchError = false) {
-
+    setCustomIcon(icon: string, catchError: boolean = false): boolean {
         if (typeof icon !== 'string') {
-            if(catchError) {
+            if (catchError) {
                 throw new Error('Icon must be a string');
             }
             return false;
@@ -373,31 +391,49 @@ export default class GetchatButton extends HTMLElement {
         let isDataUrl = false;
 
         if (icon.startsWith('<svg')) {
-            if(validateSvg(icon)) {
+            if (validateSvg(icon)) {
                 this.#setCustomIcon(icon);
                 return true;
             }
         }
         else if ((isUrl = icon.startsWith('http')) || (isDataUrl = icon.startsWith('data:image/'))) {
-            if((isUrl && validateUrl(icon)) || isDataUrl) {
+            if ((isUrl && validateUrl(icon)) || isDataUrl) {
                 this.#setCustomIcon(`<img src="${icon}" alt="icon" />`);
                 return true;
             }
         }
 
-        if(catchError) {
+        if (catchError) {
             throw new Error('Icon must be a valid SVG or URL');
         }
 
         return false;
     }
 
-    setStyles(styles) {
-        const styleElement = this.shadowRoot.getElementById('dynamic-styles');
+    #setCustomIcon(icon: string): void {
+        if (this.#rendered) {
+            const $node: Nullable<HTMLElement> = this.shadowRoot!.querySelector('.button-icon') as Nullable<HTMLElement>;
+            if ($node && $node instanceof HTMLElement) {
+                $node.innerHTML = icon;
+            }
+        }
+        else {
+            this.#icon = icon;
+        }
+    }
+
+    setStyles(styles: Record<string, string>) {
+        const styleElement: Nullable<HTMLStyleElement> = this.shadowRoot!.getElementById('dynamic-styles') as Nullable<HTMLStyleElement>;
+        if (!styleElement) {
+            console.error('Dynamic styles element not found in shadow DOM');
+            return;
+        }
+
         let cssString = '';
         for (const [key, value] of Object.entries(styles)) {
             cssString += `${key} { ${value} } `;
         }
+
         styleElement.textContent = cssString;
     }
 
@@ -407,7 +443,7 @@ export default class GetchatButton extends HTMLElement {
         }
 
         // Initial inner HTML without styles
-        this.shadowRoot.innerHTML = `
+        this.shadowRoot!.innerHTML = `
             <style id="dynamic-styles"></style>
             <button class="button">
                 <div class="button-icon">
@@ -529,6 +565,10 @@ export default class GetchatButton extends HTMLElement {
     }
 }
 
-GetchatButton.supportedAttributes = supportedAttributes;
-
 customElements.define('getchat-button', GetchatButton);
+
+declare global {
+    interface HTMLElementTagNameMap {
+        'getchat-button': GetchatButton;
+    }
+}

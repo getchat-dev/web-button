@@ -1,9 +1,10 @@
 import { defineConfig, loadEnv, build } from 'vite';
 import { resolve } from 'path';
 import replace from '@rollup/plugin-replace';
+import dts from 'vite-plugin-dts';
 import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js'
 
-const buildConfig = async(entry, env) => {
+const buildConfig = async(entry, env, mode = 'development') => {
 
     const emptyOutDir = process.argv.includes('--emptyOutDir');
 
@@ -22,6 +23,7 @@ const buildConfig = async(entry, env) => {
             },
         },
         build: {
+            sourcemap: mode === 'development',
             cssMinify: 'lightningcss',
             outDir: '../dist',
              // Explicitly set emptyOutDir to avoid the warning:
@@ -38,7 +40,8 @@ const buildConfig = async(entry, env) => {
             assetsInlineLimit: 0,
         },
         define: {
-            'process.env.VERSION': JSON.stringify(version)
+            'process.env.VERSION': JSON.stringify(version),
+            '__JS_GLOBAL_SCOPE__': JSON.stringify(env.JS_SCOPE_NAME || 'getchat'),
         },
         resolve: {
             alias: {
@@ -46,11 +49,16 @@ const buildConfig = async(entry, env) => {
             },
         },
         plugins: [
+            dts({
+                insertTypesEntry: true,
+                copyDtsFiles: true,
+                staticImport: true
+            }),
             cssInjectedByJsPlugin(),
             replace({
                 preventAssignment: true,
                 '__JS_GLOBAL_SCOPE__': JSON.stringify(env.JS_SCOPE_NAME),
-            })
+            }),
         ]
     }
 }
@@ -60,5 +68,5 @@ export { buildConfig }
 export default defineConfig(async ({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
 
-    return await buildConfig(resolve(__dirname, 'src/index.js'), env);
+    return await buildConfig(resolve(__dirname, 'src/index.ts'), env, mode);
 })

@@ -1,24 +1,38 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
-import { getMessaging, getToken, isSupported, deleteToken } from "firebase/messaging";
+import { FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
+import { Messaging, getMessaging, getToken, isSupported, deleteToken } from "firebase/messaging";
 
-let _messaging;
+import { dedupePromise } from "@/utils";
 
-const messaging = async (config) => {
-    if(! _messaging) {
+import type { NotificationPermissionStatus, BrowserNotificationPermissionAndToken } from "@/types";
 
-        if(! await isSupported()) {
+let _messaging: Nullable<Messaging>;
+
+/**
+ * Initialize or reuse Firebase Messaging instance.
+ * @param config - Firebase app config
+ * @returns Messaging instance or null if not supported
+ */
+const messaging = async (config: object): Promise<Nullable<Messaging>> => {
+    if (! _messaging) {
+        if (! await isSupported()) {
             return null;
         }
 
-        const app = getApps().length === 0 ? initializeApp(config, 'getchat-button') : getApp();
-
+        const app: FirebaseApp =
+            getApps().length === 0 ? initializeApp(config, 'getchat-button') : getApp();
         _messaging = getMessaging(app);
     }
 
     return _messaging;
 };
 
-const fetchToken = async (config, vapidKey) => {
+/**
+ * Fetch the FCM token using messaging instance.
+ * @param config - Firebase app config
+ * @param vapidKey - Public VAPID key
+ * @returns FCM token or null
+ */
+const fetchToken = async (config: object, vapidKey: string): Promise<Nullable<string>> => {
     try {
         const fcmMessaging = await messaging(config);
 
@@ -36,30 +50,27 @@ const fetchToken = async (config, vapidKey) => {
 };
 
 class FcmTokenManager {
+    #token: Nullable<string> = null;
+    #fcmConfig: Nullable<object> = null;
+    #vapidKey: Nullable<string> = null;
+    #notificationPermissionStatus: Nullable<NotificationPermissionStatus> = null;
+    #debug: boolean = false;
 
-    #token = null;
-    #fcmConfig = null;
-    #vapidKey = null;
-    #notificationPermissionStatus = null;
-    #retryLoadToken = 0;
-    #isLoading = false;
-    #debug = false;
-
-    constructor(fcmConfig, vapidKey, debug = false) {
-        if(! fcmConfig) {
+    constructor(fcmConfig: object, vapidKey: string, debug = false) {
+        if (!fcmConfig) {
             throw new Error("FCM config is required");
         }
-
-        if(! vapidKey) {
+        if (!vapidKey) {
             throw new Error("Vapid Key is required");
         }
-
-        if(debug === true) {
+        if (debug === true) {
             this.#debug = true;
         }
 
         this.#fcmConfig = fcmConfig;
         this.#vapidKey = vapidKey;
+
+        this.loadToken = dedupePromise(this.#loadToken);
     }
 
     /**
@@ -82,12 +93,12 @@ class FcmTokenManager {
      * const permissionStatus = instance.getNotificationPermission();
      * if (permissionStatus === "granted") {
      *   console.log('Notifications are allowed');
-     * } else if (permissionStatus === "unsupported") {
+     * }
+     * else if (permissionStatus === "unsupported") {
      *   console.log('Notifications are not supported in this browser');
      * }
      */
-    getNotificationPermission() {
-
+    getNotificationPermission(): NotificationPermissionStatus {
         if (! ("Notification" in window)) {
             return "unsupported";
         }
@@ -125,15 +136,16 @@ class FcmTokenManager {
      * const result = await instance.getNotificationPermissionAndToken(true);
      * console.log(result.status, result.token);
      */
-    async getNotificationPermissionAndToken(requestPermission = false) {
-
+    async getNotificationPermissionAndToken(
+        requestPermission: boolean = false
+    ): Promise<BrowserNotificationPermissionAndToken> {
         if (!("Notification" in window)) {
             console.error("This browser does not support desktop notification");
             return { status: "unsupported", token: null };
         }
 
         if (Notification.permission === "granted") {
-            const _token = await fetchToken(this.#fcmConfig, this.#vapidKey);
+            const _token = await fetchToken(this.#fcmConfig!, this.#vapidKey!);
             if (_token) {
                 this.#token = _token;
             }
@@ -148,9 +160,8 @@ class FcmTokenManager {
         // If permission is default and requestPermission is true
         if (requestPermission && window.top === window.self) {
             const permission = await Notification.requestPermission();
-
             if (permission === "granted") {
-                const _token = await fetchToken(this.#fcmConfig, this.#vapidKey);
+                const _token = await fetchToken(this.#fcmConfig!, this.#vapidKey!);
                 if (_token) {
                     this.#token = _token;
                 }
@@ -166,32 +177,32 @@ class FcmTokenManager {
         return { status: "default", token: null };
     }
 
-    async loadToken() {
-        if (this.#isLoading) return;
+    loadToken: () => Promise<BrowserNotificationPermissionAndToken>
 
-        if(this.#token) {
-            return this.#token;
-        }
+    #loadToken = (): Promise<BrowserNotificationPermissionAndToken> => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                if (this.#token) {
+                    resolve({
+                        status: (this.#notificationPermissionStatus || Notification.permission) as NotificationPermissionStatus,
+                        token: this.#token
+                    });
+                }
 
-        this.#isLoading = true;
+                let response: BrowserNotificationPermissionAndToken;
+                response = await this.getNotificationPermissionAndToken(true);
 
-        let response;
-        try {
-            response = await this.getNotificationPermissionAndToken(true);
-        }
-        catch (err) {
-            this.#isLoading = false;
-            throw err;
-        }
+                if (response.status === 'granted' && response.token) {
+                    this.#token = response.token;
+                }
 
-        if(response.status === 'granted' && response.token) {
-            this.#token = response.token;
-        }
-
-        this.#notificationPermissionStatus = Notification.permission;
-        this.#isLoading = false;
-
-        return response;
+                this.#notificationPermissionStatus = Notification.permission as NotificationPermissionStatus;
+                resolve(response);
+            }
+            catch (err) {
+                reject(err);
+            }
+        });
     }
 
     /**
@@ -217,13 +228,13 @@ class FcmTokenManager {
      *   console.log('Failed to delete token');
      * }
      */
-    async deleteToken() {
-        if(this.#token) {
+    async deleteToken(): Promise<boolean> {
+        if (this.#token) {
             try {
-                const fcmMessaging = await messaging(this.#fcmConfig);
-                if(fcmMessaging) {
+                const fcmMessaging = await messaging(this.#fcmConfig!);
+                if (fcmMessaging) {
                     const status = await deleteToken(fcmMessaging);
-                    if(status) {
+                    if (status) {
                         this.#token = null;
 
                         return true;
@@ -231,13 +242,13 @@ class FcmTokenManager {
                 }
             }
             catch (err) {
-                if(this.#debug) {
+                if (this.#debug) {
                     console.error("An error occurred while deleting the token:", err);
                 }
             }
         }
         else {
-            if(this.#debug) {
+            if (this.#debug) {
                 console.error("Token is not set");
             }
         }
