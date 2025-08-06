@@ -1,8 +1,17 @@
 import { safeJSONParse, iframeRPC, dedupePromise, promiseWithResolve, isPlainObject, isString } from '@/utils.js';
 import { startObservViewport } from '@/viewportObserver';
+import deviceDetector from '@/deviceDetector';
 import embedChat from '@/embedChat';
 import onMessage from '@/onMessage';
+
 import type FcmManager from '@/fcm';
+import type { createFaviconBadgeManager } from '@/faviconBadgeManager';
+import type { createSharedWorker, CreatedSharedWorker } from '@/createSharedWorker';
+import type { createTimerWorker, SharedWorkerTimer } from '@/createTimerWorker';
+import type { UnreadSummary } from '@/types';
+
+// @ts-ignore
+import timerWorkerUrl from '@/timer-worker?sharedworker&no-inline';
 
 async function loadFcm() {
     const module = await import('@/fcm');
@@ -10,6 +19,39 @@ async function loadFcm() {
     if (!module.default) throw new Error('fcm.js does not have default export');
 
     return module.default;
+}
+
+type BadgeManagerPackages = {
+    createFaviconBadgeManager: typeof createFaviconBadgeManager;
+    createSharedWorker?: typeof createSharedWorker;
+    createTimerWorker?: typeof createTimerWorker;
+    workerUrl?: string;
+}
+
+async function loadBadgeManagerPackages(): Promise<BadgeManagerPackages> {
+
+    const faviconBadgeManagerModule = await import('@/faviconBadgeManager');
+    if (!faviconBadgeManagerModule) throw new Error('Failed to load faviconBadgeManager.js');
+    if (!faviconBadgeManagerModule.createFaviconBadgeManager) throw new Error('faviconBadgeManager.js does not have createFaviconBadgeManager export');
+
+    const results: BadgeManagerPackages = {
+        createFaviconBadgeManager: faviconBadgeManagerModule.createFaviconBadgeManager,
+    };
+
+    const createSharedWorkerModule = await import('@/createSharedWorker');
+    if (!createSharedWorkerModule) console.error('Failed to load createSharedWorker.js');
+    if (!createSharedWorkerModule.createSharedWorker) console.error('createSharedWorker.js does not have createSharedWorker export');
+
+    const createTimerWorker = await import('@/createTimerWorker');
+    if (!createTimerWorker) console.error('Failed to load createTimerWorker.js');
+    if (!createTimerWorker.createTimerWorker) console.error('createTimerWorker.js does not have createTimerWorker export');
+
+    results.createSharedWorker = createSharedWorkerModule.createSharedWorker;
+    results.createTimerWorker = createTimerWorker.createTimerWorker;
+    results.workerUrl = import.meta.resolve('./timer-worker.js');
+    // results.workerUrl = timerWorkerUrl;
+
+    return results;
 }
 
 import type {
@@ -45,7 +87,7 @@ export default class Chat {
 
     load: () => Promise<boolean>;
 
-    constructor({ id, url, node, nodeStyle, onBeforeLoad, onLoaded, handleKeyboardOnTouchDevices = true }: ChatOptions) {
+    constructor({ id, url, node, nodeStyle, onBeforeLoad, onLoaded, handleKeyboardOnTouchDevices = true, showUnreadInBrowserTab = false }: ChatOptions) {
         if (!node) throw new Error('node parameter is required');
 
         if (typeof node === 'string') {
@@ -73,7 +115,7 @@ export default class Chat {
             this.#onBeforeChatLoad = onBeforeLoad;
         }
 
-        this.#onChatLoadedCallback = () => {
+        this.#onChatLoadedCallback = async() => {
             this.#loadingState = 2;
             if (typeof onLoaded === 'function') {
                 onLoaded(this.#chatIframe);
@@ -81,6 +123,33 @@ export default class Chat {
 
             if (handleKeyboardOnTouchDevices === true) {
                 startObservViewport(this.#chatNode);
+            }
+
+            if (showUnreadInBrowserTab === true && deviceDetector().isDesktop === true) {
+                const { createFaviconBadgeManager, createSharedWorker, createTimerWorker, workerUrl } = await loadBadgeManagerPackages();
+                let worker: Nullable<CreatedSharedWorker> = null;
+                let timer: SharedWorkerTimer | Window = window;
+
+                if(createSharedWorker && createTimerWorker && workerUrl) {
+                    try {
+                        worker = await createSharedWorker(workerUrl, {name: 'sync-timer-worker', type: 'module'});
+                        if(worker) {
+                            timer = createTimerWorker(worker);
+                        }
+                    }
+                    catch (e) {
+                        console.error(e);
+                    }
+                }
+
+                // const { setBadge, clean } = createFaviconBadgeManager({ type: 'fill', animation: 'blink', borderRadius: 8 });
+                const { setBadge, clean } = createFaviconBadgeManager({ borderRadius: 8 }, timer);
+
+                this.rpc('getchat.messenger.getUnreads').then((result: UnreadSummary) => {
+                    if(result?.total?.messages > 0) {
+                        setBadge(result?.total?.chats);
+                    }
+                });
             }
 
             this.#onChatLoadedCallback = null;

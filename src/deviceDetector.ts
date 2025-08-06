@@ -9,6 +9,7 @@ type DeviceInfo = {
         version: string;
     };
     isStandalone: boolean;
+    isDesktop: boolean;
     apiUsed: string;
 }
 
@@ -27,12 +28,13 @@ let _cachedDeviceInfo: DeviceInfo | null = null;
  * This function caches its result after the first call. Subsequent calls will
  * return the cached information without re-detecting.
  *
- * @returns {Object} An object containing 'os', 'browser', 'isStandalone', and 'apiUsed' properties.
+ * @returns {Object} An object containing 'os', 'browser', 'isStandalone', 'isDesktop', and 'apiUsed' properties.
  * - os: The detected operating system (e.g., 'iOS', 'Windows', 'macOS').
  * - browser: An object containing:
  * - name: The detected browser's name (e.g., 'Chrome', 'Safari', 'Firefox').
  * - version: The detected browser's version (major version for UA-CH, 'Unknown' for User-Agent string fallback).
  * - isStandalone: A boolean indicating if the app is running in standalone mode (e.g., PWA, iOS Home Screen app).
+ * - isDesktop: A boolean indicating if the device is likely a desktop or laptop.
  * - apiUsed: The API used for detection ('User-Agent Client Hints' or 'User-Agent String').
  */
 export default function detectDevice(): DeviceInfo {
@@ -43,14 +45,13 @@ export default function detectDevice(): DeviceInfo {
 
     let os = 'Unknown OS';
     let browser = { name: 'Unknown Browser', version: 'Unknown' };
-    let isStandalone = false; // Initialize standalone mode status
+    let isStandalone = false;
+    let isDesktop = false;
     let apiUsed = 'Unknown API';
     // Get user agent string once and convert to lowercase for consistent comparisons
     const userAgentLower = navigator.userAgent.toLowerCase();
 
     // Determine standalone mode
-    // navigator.standalone is primarily for iOS Home Screen apps
-    // matchMedia is for general PWA standalone display mode
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
         isStandalone = true;
     }
@@ -58,6 +59,8 @@ export default function detectDevice(): DeviceInfo {
         isStandalone = true;
     }
 
+    // A list of keywords commonly found in mobile user agents
+    const mobileKeywords = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
     // Check if User-Agent Client Hints API is available
     if ((navigator as any).userAgentData) {
@@ -65,21 +68,37 @@ export default function detectDevice(): DeviceInfo {
         apiUsed = 'User-Agent Client Hints';
 
         // 1. Detect Operating System using platform
-        // Convert platform to lowercase for consistent comparison
         const platformLower = (navigator as any).userAgentData.platform.toLowerCase();
 
         if (platformLower === 'macos') {
             os = 'macOS';
+            isDesktop = true;
         } else if (platformLower === 'windows') {
             os = 'Windows';
+            isDesktop = true;
         } else if (platformLower === 'android') {
             os = 'Android';
+            isDesktop = false;
         } else if (platformLower === 'ios') {
             os = 'iOS';
+            isDesktop = false;
         } else if (platformLower === 'linux') {
             os = 'Linux';
+
+            if (!mobileKeywords.test(userAgentLower)) {
+                isDesktop = true;
+            }
         } else {
             os = 'Unknown OS (via UA-CH)';
+            // If the platform is unknown, we check for other signs.
+            if (!mobileKeywords.test(userAgentLower) && !('ontouchstart' in window || (navigator as any).maxTouchPoints > 0)) {
+                isDesktop = true;
+            }
+        }
+
+        // Use the `mobile` boolean from User-Agent Client Hints if available
+        if (typeof (navigator as any).userAgentData.mobile === 'boolean') {
+            isDesktop = !(navigator as any).userAgentData.mobile;
         }
 
         // 2. Detect Browser using brands array
@@ -87,9 +106,8 @@ export default function detectDevice(): DeviceInfo {
         if (brands && brands.length > 0) {
             let foundBrowser = false;
             for (const brand of brands) {
-                // Convert brand name to lowercase for consistent comparison
                 const brandNameLower = brand.brand.toLowerCase();
-                const brandVer = brand.version; // Get version from UA-CH brand
+                const brandVer = brand.version;
 
                 if (brandNameLower.includes('chrome') && !brandNameLower.includes('chromium')) {
                     browser.name = 'Chrome';
@@ -112,7 +130,6 @@ export default function detectDevice(): DeviceInfo {
                     foundBrowser = true;
                     break;
                 }
-                // Add more specific browser checks if needed
             }
 
             if (!foundBrowser && brands[0] && brands[0].brand) {
@@ -127,13 +144,12 @@ export default function detectDevice(): DeviceInfo {
             browser.version = 'Unknown';
         }
 
-        // Refine iOS browser detection if platform is iOS, using the lowercased userAgent
+        // Refine iOS browser detection
         if (os === 'iOS') {
             // For iOS, UA-CH might not give specific browser names like Safari, Chrome (iOS).
             // We use userAgentLower for more specific browser identification on iOS.
             if (userAgentLower.includes('crios')) {
                 browser.name = 'Chrome';
-                // Attempt to extract version from userAgent string for iOS Chrome
                 const match = userAgentLower.match(/crios\/(\d+\.\d+\.\d+\.\d+)/);
                 if (match && match[1]) browser.version = match[1];
             } else if (userAgentLower.includes('fxios')) {
@@ -146,7 +162,6 @@ export default function detectDevice(): DeviceInfo {
                 if (match && match[1]) browser.version = match[1];
             } else if (userAgentLower.includes('safari') && !userAgentLower.includes('chrome') && !userAgentLower.includes('crios') && !userAgentLower.includes('fxios') && !userAgentLower.includes('edgios')) {
                 browser.name = 'Safari';
-                // Safari version is often tied to iOS version, or found after 'Version/'
                 const match = userAgentLower.match(/version\/(\d+\.\d+)/);
                 if (match && match[1]) browser.version = match[1];
             } else if (userAgentLower.includes('opera mini')) {
@@ -164,22 +179,39 @@ export default function detectDevice(): DeviceInfo {
         apiUsed = 'User-Agent String';
         console.warn("navigator.userAgentData not supported. Falling back to userAgent string parsing.");
 
-        // 1. Detect Operating System (from original code), using the lowercased userAgent
+        // 1. Detect Operating System and Desktop status
         if (userAgentLower.includes('ipad') || userAgentLower.includes('iphone') || userAgentLower.includes('ipod')) {
             os = 'iOS';
+            isDesktop = false;
         } else if (userAgentLower.includes('android')) {
             os = 'Android';
+            isDesktop = false;
         } else if (userAgentLower.includes('macintosh') || userAgentLower.includes('mac os x')) {
             os = 'macOS';
+            isDesktop = true;
         } else if (userAgentLower.includes('windows')) {
             os = 'Windows';
+            isDesktop = true;
         } else if (userAgentLower.includes('linux')) {
             os = 'Linux';
+            // Linux can be desktop, so we check for mobile keywords.
+            isDesktop = !mobileKeywords.test(userAgentLower);
         } else {
             os = 'Unknown OS (via User-Agent)';
+            // If OS is unknown, rely on the absence of mobile keywords.
+            isDesktop = !mobileKeywords.test(userAgentLower);
         }
 
-        // 2. Detect Browser (from original code), using the lowercased userAgent
+        // Further refine desktop detection for touch screens
+        // A desktop can have a touchscreen, but a mobile device almost always does.
+        // So, if it has a touchscreen AND it's not a known desktop OS, it's probably not a desktop.
+        const hasTouchSupport = 'ontouchstart' in window || (navigator as any).maxTouchPoints > 0;
+        if (hasTouchSupport && os !== 'Windows' && os !== 'macOS') {
+            // This is a weak signal, but helps for ambiguous cases like Linux tablets.
+            isDesktop = false;
+        }
+
+        // 2. Detect Browser
         if (os === 'iOS') {
             if (userAgentLower.includes('crios')) {
                 browser.name = 'Chrome';
@@ -238,7 +270,6 @@ export default function detectDevice(): DeviceInfo {
         }
     }
 
-    // Cache the detected information before returning
-    _cachedDeviceInfo = { os, browser, isStandalone, apiUsed };
+    _cachedDeviceInfo = { os, browser, isStandalone, isDesktop, apiUsed };
     return _cachedDeviceInfo;
 }

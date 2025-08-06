@@ -6,6 +6,10 @@ const uuid = function () {
     });
 };
 
+const genId = function getId(): string {
+    return Math.random().toString(36).slice(2);
+}
+
 const isString = function (value: unknown, notEmpty = false): value is string {
     if (typeof value !== 'string') {
         return false;
@@ -627,6 +631,7 @@ const asyncEmbedIframe = callbackFuncToAsync(embedIframe, 'onload', 'onerror');
 
 export {
     uuid,
+    genId,
     isString,
     addClassName,
     removeClassName,

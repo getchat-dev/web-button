@@ -47,6 +47,8 @@ export interface ChatOptions {
      * Smart handle opening/closing keyboard on touch devices.
      */
     handleKeyboardOnTouchDevices?: boolean;
+
+    showUnreadInBrowserTab?: boolean;
 }
 
 export type NotificationPermissionStatus = "granted" | "denied" | "default" | "unsupported";

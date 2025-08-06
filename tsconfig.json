@@ -13,7 +13,8 @@
     "lib": [
       "es2024",
       "DOM",
-      "DOM.Iterable"
+      "DOM.Iterable",
+      "webworker"
     ],
     "skipLibCheck": true,
     "outDir": "dist",

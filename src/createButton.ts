@@ -123,6 +123,13 @@ interface CreateButtonOptions {
     /**
      * [For additional, custom options]
      */
+
+    /**
+     * Whether to show unread messages in the browser tab in favicon.
+     * @default true
+     */
+    showUnreadInBrowserTab?: boolean;
+
     [key: string]: any; // For additional options
 }
 
@@ -285,6 +292,7 @@ export default async function ({
             url: unescapeHTML(uri) as string,
             node: chatNode,
             handleKeyboardOnTouchDevices: true,
+            showUnreadInBrowserTab: true,
 
             onLoaded: function () {
                 // exactly here, on loading and before opening.

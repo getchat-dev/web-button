@@ -68,5 +68,8 @@ export { buildConfig }
 export default defineConfig(async ({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
 
-    return await buildConfig(resolve(__dirname, 'src/index.ts'), env, mode);
+    return await buildConfig({
+        index: resolve(__dirname, 'src/index.ts'),
+        'timer-worker': resolve(__dirname, 'src/timer-worker.js'),
+    }, env, mode);
 })

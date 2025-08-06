@@ -350,42 +350,44 @@ If window.GetChat is undefined, it means the script has not yet been initialized
 
 > **Note:** Options marked with `*` are required.
 
-| Option            | Type                                                | Description                                      | Default      |
-|-------------------|-----------------------------------------------------|--------------------------------------------------|--------------|
-| `uri`*               | `string`                                         | The URI for the chat service.                    | `undefined`  |
-| `insertButtonTo`*    | `HTMLElement \| (() => HTMLElement) \| null`     | The HTML element to insert the button into.      | `undefined`  |
-| `className`          | `string`                                         | The class name to apply to the button.           | `undefined`  |
-| `showUnread`         | `boolean \| 'messages' \| 'chats'`               | Whether to show unread messages count.           | `undefined`  |
-| `autoload`           | `boolean`                                        | Whether to autoload the chat.                    | `false`      |
-| `autoopen`           | `boolean`                                        | Whether to open the chat widget automatically.   | `false`      |
-| `autoopenDelay`      | `number`                                         | Delay in milliseconds before auto open.          | `5000`       |
-| `closeOnEscape`      | `boolean`                                        | Whether to close the chat on escape press.       | `true`       |
-| `mobileModeMaxWidth` | `number`                                         | The maximum width of the mobile mode.            | `460`        |
-| `bgcolor`            | `string`                                         | Background color of the button.                  | `undefined`  |
-| `bdradius`           | `string`                                         | Border radius of the button.                     | `undefined`  |
-| `bdwidth`            | `string`                                         | Border width of the button.                      | `undefined`  |
-| `bdcolor`            | `string`                                         | Border color of the button.                      | `undefined`  |
-| `badgebg`            | `string`                                         | Background color of badge on the button.         | `undefined`  |
-| `badgecolor`         | `string`                                         | Color of badge on the button.                    | `undefined`  |
-| `color`              | `string`                                         | Text color of the button.                        | `undefined`  |
-| `buttonStyle`        | `Partial<CSSStyleDeclaration>`                   | Custom styles to apply to the button.            | `undefined`  |
-| `chatClassName`      | `string`                                         | Class name to apply to the chat window.          | `undefined`  |
-| `chatParent`         | `HTMLElement \| null`                            | The parent HTML element of the chat window.      | `undefined`  |
-| `chatStyle`          | `Partial<CSSStyleDeclaration>`                   | Custom styles to apply to the chat window.       | `undefined`  |
-| `chatNode`           | `HTMLElement \| null`                            | The HTML element representing the chat node.     | `undefined`  |
-| `node`               | `HTMLElement \| null`                            | The HTML element representing the node.          | `undefined`  |
+| Option                   | Type                                             | Description                                                | Default      |
+|--------------------------|--------------------------------------------------|------------------------------------------------------------|--------------|
+| `uri`*                   | `string`                                         | The URI for the chat service.                              | `undefined`  |
+| `insertButtonTo`*        | `HTMLElement \| (() => HTMLElement) \| null`     | The HTML element to insert the button into.                | `undefined`  |
+| `className`              | `string`                                         | The class name to apply to the button.                     | `undefined`  |
+| `showUnread`             | `boolean \| 'messages' \| 'chats'`               | Whether to show unread messages count.                     | `undefined`  |
+| `autoload`               | `boolean`                                        | Whether to autoload the chat.                              | `false`      |
+| `autoopen`               | `boolean`                                        | Whether to open the chat widget automatically.             | `false`      |
+| `autoopenDelay`          | `number`                                         | Delay in milliseconds before auto open.                    | `5000`       |
+| `closeOnEscape`          | `boolean`                                        | Whether to close the chat on escape press.                 | `true`       |
+| `mobileModeMaxWidth`     | `number`                                         | The maximum width of the mobile mode.                      | `460`        |
+| `bgcolor`                | `string`                                         | Background color of the button.                            | `undefined`  |
+| `bdradius`               | `string`                                         | Border radius of the button.                               | `undefined`  |
+| `bdwidth`                | `string`                                         | Border width of the button.                                | `undefined`  |
+| `bdcolor`                | `string`                                         | Border color of the button.                                | `undefined`  |
+| `badgebg`                | `string`                                         | Background color of badge on the button.                   | `undefined`  |
+| `badgecolor`             | `string`                                         | Color of badge on the button.                              | `undefined`  |
+| `color`                  | `string`                                         | Text color of the button.                                  | `undefined`  |
+| `buttonStyle`            | `Partial<CSSStyleDeclaration>`                   | Custom styles to apply to the button.                      | `undefined`  |
+| `chatClassName`          | `string`                                         | Class name to apply to the chat window.                    | `undefined`  |
+| `chatParent`             | `HTMLElement \| null`                            | The parent HTML element of the chat window.                | `undefined`  |
+| `chatStyle`              | `Partial<CSSStyleDeclaration>`                   | Custom styles to apply to the chat window.                 | `undefined`  |
+| `chatNode`               | `HTMLElement \| null`                            | The HTML element representing the chat node.               | `undefined`  |
+| `node`                   | `HTMLElement \| null`                            | The HTML element representing the node.                    | `undefined`  |
+| `showUnreadInBrowserTab` | `boolean`                                        | Whether to show unread messages in the browser tab favicon.| `true`       |
 
 ### ChatOptions Interface
 
-| Property                       | Type                            | Default | Description                                                  |
-|--------------------------------|---------------------------------|---------|--------------------------------------------------------------|
-| `id`                           | `string`                       .      | N/A     | A unique identifier for the chat instance.             |
-| `url`                          | `string`                       .      | N/A     | The URL of the chat service.                           |
-| `node`                         | `HTMLElement \| string \| null`.      | N/A     | The HTML element where the chat will be embedded.      |
-| `nodeStyle`                    | `Partial<CSSStyleDeclaration>` .      | N/A     | Custom styles to apply to the chat node.               |
-| `handleKeyboardOnTouchDevices` | `boolean`                      .      | `true`  | Whether to handle keyboard events on touch devices.    |
-| `onBeforeLoad`                 | `(iframe: HTMLIFrameElement) => void` | N/A     | Callback function to call before the chat is loaded.   |
-| `onLoaded`                     | `() => void`                   .      | N/A     | Callback when the chat is fully loaded.                |
+| Property                       | Type                            | Default | Description                                                       |
+|--------------------------------|---------------------------------|---------|-------------------------------------------------------------------|
+| `id`                           | `string`                       .      | N/A     | A unique identifier for the chat instance.                  |
+| `url`                          | `string`                       .      | N/A     | The URL of the chat service.                                |
+| `node`                         | `HTMLElement \| string \| null`.      | N/A     | The HTML element where the chat will be embedded.           |
+| `nodeStyle`                    | `Partial<CSSStyleDeclaration>` .      | N/A     | Custom styles to apply to the chat node.                    |
+| `handleKeyboardOnTouchDevices` | `boolean`                      .      | `true`  | Whether to handle keyboard events on touch devices.         |
+| `showUnreadInBrowserTab`       | `boolean`                      .      | `true`  | Whether to show unread messages in the browser tab favicon. |
+| `onBeforeLoad`                 | `(iframe: HTMLIFrameElement) => void` | N/A     | Callback function to call before the chat is loaded.        |
+| `onLoaded`                     | `() => void`                   .      | N/A     | Callback when the chat is fully loaded.                     |
 
 ### Notification Interface
 > **Note:** Options marked with `*` are required.
