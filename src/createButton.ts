@@ -20,7 +20,7 @@ import type { Nullable } from '@/types';
 
 import styles from '@/outer.module.css';
 
-interface CreateButtonOptions {
+export interface CreateButtonOptions {
     /**
      * The URI for the chat service.
      */
@@ -161,7 +161,7 @@ interface CreateButtonOptions {
  * @property {Partial<CSSStyleDeclaration>} [chatStyle] - Custom styles to apply to the chat window.
  * @property {HTMLElement|null} [chatNode] - The HTML element representing the chat node.
  */
-export default async function ({
+export default async function createButton({
     uri,
     className,
     showUnread = false,
