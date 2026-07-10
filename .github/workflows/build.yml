@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,7 +20,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v3
       with:
-        node-version: '20'
+        node-version: '24'
     - run: npm install
     - run: npm run build-browser
     - run: ls dist/browser.js  # Ensure the build file exists
@@ -27,6 +31,38 @@ jobs:
         name: browserBuild
         path: dist/*.js
         if-no-files-found: error
+
+  # Validates the npm-published half (ESM bundle + generated .d.ts), which the
+  # CDN build above never exercises. Packs the real tarball and type-checks a
+  # consumer against it, so a broken/missing export or type fails CI instead of
+  # slipping into npm.
+  verify-package:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - run: npm install
+
+    - name: Pack (runs prepack — type-check + ESM + UMD) and smoke-test a consumer
+      run: |
+        set -euo pipefail
+        PKG=$(npm pack 2>/dev/null | tail -1)
+        echo "packed: $PKG"
+        DIR=$(mktemp -d)
+        cd "$DIR"
+        npm init -y >/dev/null
+        npm install "$GITHUB_WORKSPACE/$PKG" typescript >/dev/null
+        {
+          echo "import SDK, { createButton, Chat, Messenger, version } from '@getchat-dev/web-button';"
+          echo "import type { CreateButtonOptions } from '@getchat-dev/web-button';"
+          echo "const opts: CreateButtonOptions = { uri: 'x' };"
+          echo "void [SDK, createButton, Chat, Messenger, version, opts];"
+        } > probe.ts
+        npx tsc --noEmit --strict --moduleResolution bundler --module esnext --target ES2022 --lib ES2022,DOM probe.ts
+        echo "OK: named + default exports and public types resolve from the tarball"
 
   deploy:
     needs: build
@@ -48,3 +84,35 @@ jobs:
       uses: actions/deploy-pages@v3
       with:
         artifact_name: browserBuild
+
+  # Publishes to npm only on push to main, and only when the version in
+  # package.json is not already on the registry. Requires an NPM_TOKEN secret.
+  publish:
+    needs: [build, verify-package]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        registry-url: 'https://registry.npmjs.org'
+        package-manager-cache: false
+
+    - name: Publish if package.json version is new
+      run: |
+        set -euo pipefail
+        NAME=$(node -p "require('./package.json').name")
+        VERSION=$(node -p "require('./package.json').version")
+        if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+          echo "$NAME@$VERSION is already published — skipping"
+        else
+          echo "publishing $NAME@$VERSION"
+          npm install -g npm@latest
+          npm ci
+          npm publish --access public
+        fi

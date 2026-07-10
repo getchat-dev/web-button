@@ -13,7 +13,7 @@
     "build-browser:dev": "vite build --emptyOutDir --watch --mode development --config vite.browser.config.js",
     "build:tsc": "tsc",
     "preview": "vite preview",
-    "prepack": "vite build --emptyOutDir && vite build --config vite.browser.config.js"
+    "prepack": "tsc --noEmit && vite build --emptyOutDir && vite build --config vite.browser.config.js"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
