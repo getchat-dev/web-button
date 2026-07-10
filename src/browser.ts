@@ -3,7 +3,7 @@ import deviceDetector from '@/deviceDetector';
 import Chat from '@/Chat';
 import GetchatButton from '@/GetchatButton';
 
-(function (w) {
+(function (w: Record<string, any>) {
 
     if (w[__JS_GLOBAL_SCOPE__]?.isLoaded) {
         return;
@@ -30,4 +30,4 @@ import GetchatButton from '@/GetchatButton';
         Object.freeze(w[__JS_GLOBAL_SCOPE__])
     }
 
-})(window);
+})(window as unknown as Record<string, any>);

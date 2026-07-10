@@ -1,6 +1,7 @@
 import { genId } from '@/utils';
 
 import type { HandshakeMessageRequest, ProtocolMessageRequest } from './timer-worker';
+import type { Nullable } from '@/types';
 
 export interface CreatedSharedWorker {
     sendMessage: (message: ProtocolMessageRequest) => Promise<any>;

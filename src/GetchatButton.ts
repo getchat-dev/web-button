@@ -9,7 +9,7 @@ import {
 import { startObservViewport, finishObservViewport } from '@/viewportObserver';
 import Chat from '@/Chat';
 
-import type { UnreadSummary } from '@/types';
+import type { Nullable, UnreadSummary } from '@/types';
 
 import styles from '@/outer.module.css';
 

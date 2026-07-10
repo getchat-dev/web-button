@@ -1,3 +1,5 @@
+import type { Nullable } from '@/types';
+
 const uuid = function () {
     return 'xxxxxxxx-xxxx'.replace(/[xy]/g, function (c) {
         var r = Math.random() * 16 | 0,

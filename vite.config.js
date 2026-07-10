@@ -52,6 +52,12 @@ const buildConfig = async(entry, env, mode = 'development') => {
             dts({
                 insertTypesEntry: true,
                 copyDtsFiles: true,
+                // globals.d.ts declares build-only ambient globals (process.env.VERSION,
+                // __JS_GLOBAL_SCOPE__) that are inlined at build time. Shipping it would
+                // leak globals into consumers and clash with @types/node's `process`.
+                // `exclude` only filters declaration generation, not copied .d.ts, so
+                // drop this one file at write time instead.
+                beforeWriteFile: (filePath) => filePath.endsWith('globals.d.ts') ? false : undefined,
                 staticImport: true
             }),
             cssInjectedByJsPlugin(),

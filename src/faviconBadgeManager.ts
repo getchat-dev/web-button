@@ -1,5 +1,12 @@
 import type { SharedWorkerTimer } from '@/createTimerWorker';
 
+type TimerHandle = string | number | null | undefined;
+
+// Only the SharedWorker-backed facade exposes the wall-clock-aligned variants;
+// plain `window` gets the ordinary ones.
+const supportsSyncTimers = (timers: SharedWorkerTimer | Window): timers is SharedWorkerTimer =>
+    'setSyncTimeout' in timers;
+
 type BadgeNumber = number | string;
 
 interface FavicoOptions {
@@ -73,10 +80,26 @@ export function createFaviconBadgeManager(options: FavicoOptions = {}, timers: S
     let doc: Document;
     let origIcons: HTMLLinkElement[] = [];
     let context: CanvasRenderingContext2D | null = null;
-    let blinkTimeout: number | null = null;
-    let setBadgeTimeout: number | string | undefined;
+    let blinkTimeout: TimerHandle = null;
+    let setBadgeTimeout: TimerHandle;
     let isBadgeVisible: boolean = false;
     let currentBadgeData: BadgeData | null = null;
+
+    const setTimer = (callback: () => void, ms: number): TimerHandle =>
+        supportsSyncTimers(timers)
+            ? timers.setSyncTimeout(callback, ms)
+            : timers.setTimeout(callback, ms);
+
+    const clearTimer = (id: TimerHandle): void => {
+        if (id === null || id === undefined) return;
+
+        if (supportsSyncTimers(timers)) {
+            timers.clearSyncTimeout(id);
+        }
+        else {
+            timers.clearTimeout(id as number);
+        }
+    };
 
     // Merge user options with defaults
     const opts: FavicoOptions = {
@@ -151,7 +174,7 @@ export function createFaviconBadgeManager(options: FavicoOptions = {}, timers: S
 
     function stopBlinkAnimation() {
         if (blinkTimeout) {
-            timers['clearSyncTimeout' in timers ? 'clearSyncTimeout' : 'clearTimeout'](blinkTimeout);
+            clearTimer(blinkTimeout);
             blinkTimeout = null;
         }
     }
@@ -177,7 +200,7 @@ export function createFaviconBadgeManager(options: FavicoOptions = {}, timers: S
         }
 
         lastSharpBlinkTime = Date.now();
-        blinkTimeout = timers['setSyncTimeout' in timers ? 'setSyncTimeout' : 'setTimeout'](toggleSharpBlink, BLINK_DURATION_MS) as any;
+        blinkTimeout = setTimer(toggleSharpBlink, BLINK_DURATION_MS);
     }
 
     function startSharpBlink() {
@@ -216,10 +239,10 @@ export function createFaviconBadgeManager(options: FavicoOptions = {}, timers: S
     }
 
     function setBadge(number: BadgeNumber, badgeOpts: FavicoOptions = {}) {
-        timers['clearSyncTimeout' in timers ? 'clearSyncTimeout' : 'clearTimeout'](setBadgeTimeout as any);
+        clearTimer(setBadgeTimeout);
 
         if (!ready) {
-            setBadgeTimeout = timers['setSyncTimeout' in timers ? 'setSyncTimeout' : 'setTimeout'](() => setBadge(number, badgeOpts), 0);
+            setBadgeTimeout = setTimer(() => setBadge(number, badgeOpts), 0);
             return;
         }
 

@@ -39,7 +39,6 @@
   ],
   "files": [
     "dist",
-    "src/*.d.ts",
     "package.json",
     "README.md",
     "LICENSE"

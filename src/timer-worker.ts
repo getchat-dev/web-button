@@ -353,7 +353,7 @@ const handleMessage = (port: MessagePort, event: MessageEvent) => {
     }
 };
 
-self.onconnect = (event: MessageEvent & { ports: MessagePort[] }) => {
+onconnect = (event: MessageEvent & { ports: MessagePort[] }) => {
     console.info('[TimerWorker] Connection established with port:', event.ports[0]);
     const port = event.ports[0];
     port.onmessage = (event: MessageEvent) => handleMessage(port, event);

@@ -16,6 +16,7 @@ import Chat from '@/Chat';
 import type GetchatButton from '@/GetchatButton';
 import type { SupportedAttribute } from '@/GetchatButton';
 import type { CompartmentalizedCssValue } from '@/utils';
+import type { Nullable } from '@/types';
 
 import styles from '@/outer.module.css';
 

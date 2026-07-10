@@ -1,3 +1,5 @@
+export type Nullable<T> = T | null | undefined;
+
 export interface ChatOptions {
     /**
      * The unique identifier for the chat instance.

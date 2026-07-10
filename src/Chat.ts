@@ -55,6 +55,7 @@ async function loadBadgeManagerPackages(): Promise<BadgeManagerPackages> {
 }
 
 import type {
+    Nullable,
     ChatOptions,
     InitWebPushNotificationsOptions,
     NotificationPermissionResult,

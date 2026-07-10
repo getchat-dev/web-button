@@ -3,7 +3,7 @@ import { Messaging, getMessaging, getToken, isSupported, deleteToken } from "fir
 
 import { dedupePromise } from "@/utils";
 
-import type { NotificationPermissionStatus, BrowserNotificationPermissionAndToken } from "@/types";
+import type { Nullable, NotificationPermissionStatus, BrowserNotificationPermissionAndToken } from "@/types";
 
 let _messaging: Nullable<Messaging>;
 
