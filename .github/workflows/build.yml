@@ -21,16 +21,9 @@ jobs:
     - uses: actions/setup-node@v3
       with:
         node-version: '24'
-    - run: npm install
+    - run: npm ci
     - run: npm run build-browser
     - run: ls dist/browser.js  # Ensure the build file exists
-
-    - name: Upload Build Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: browserBuild
-        path: dist/*.js
-        if-no-files-found: error
 
   # Validates the npm-published half (ESM bundle + generated .d.ts), which the
   # CDN build above never exercises. Packs the real tarball and type-checks a
@@ -44,7 +37,7 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: '24'
-    - run: npm install
+    - run: npm ci
 
     - name: Pack (runs prepack — type-check + ESM + UMD) and smoke-test a consumer
       run: |
@@ -63,27 +56,6 @@ jobs:
         } > probe.ts
         npx tsc --noEmit --strict --moduleResolution bundler --module esnext --target ES2022 --lib ES2022,DOM probe.ts
         echo "OK: named + default exports and public types resolve from the tarball"
-
-  deploy:
-    needs: build
-
-    permissions:
-      contents: read    # to read the artifact
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
-
-    # Deploy to the github-pages environment
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    runs-on: ubuntu-latest
-    steps:
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v3
-      with:
-        artifact_name: browserBuild
 
   # Publishes to npm only on push to main, and only when the version in
   # package.json is not already on the registry. Requires an NPM_TOKEN secret.
@@ -122,7 +94,7 @@ jobs:
   # cancelled. Skipped stages (e.g. publish on a PR, or when the version is not
   # new) do not count as failure. Runs last, always.
   notify:
-    needs: [build, verify-package, deploy, publish]
+    needs: [build, verify-package, publish]
     if: always()
     runs-on: ubuntu-latest
 
