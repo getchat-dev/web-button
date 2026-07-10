@@ -50,12 +50,18 @@ export default function createIFrame(
         frame.onerror = onerror;
     }
 
+    frame.setAttribute('frameborder', '0');
+    frame.setAttribute('seamless', 'seamless');
+
+    // must be set before src, otherwise the container policy may be computed
+    // for a navigation that already started
+    if(! frame.hasAttribute('allow')) {
+        frame.setAttribute('allow', 'microphone; clipboard-write; encrypted-media; fullscreen; picture-in-picture');
+    }
+
     if (src && !frame.src) {
         frame.src = src;
     }
-
-    frame.setAttribute('frameborder', '0');
-    frame.setAttribute('seamless', 'seamless');
 
     onMessage('getchat.loaded', function () {
         if (typeof onready === 'function') {
