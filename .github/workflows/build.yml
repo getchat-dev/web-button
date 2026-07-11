@@ -58,7 +58,9 @@ jobs:
         echo "OK: named + default exports and public types resolve from the tarball"
 
   # Publishes to npm only on push to main, and only when the version in
-  # package.json is not already on the registry. Requires an NPM_TOKEN secret.
+  # package.json is not already on the registry. Auth is via OIDC trusted
+  # publishing (configured on npmjs.com) — no NPM_TOKEN secret, just the
+  # id-token: write permission below and a recent npm (>= 11.5.1).
   publish:
     needs: [build, verify-package]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -66,6 +68,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write   # mint the OIDC token npm trusted publishing verifies
 
     steps:
     - uses: actions/checkout@v6
