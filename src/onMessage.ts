@@ -2,12 +2,24 @@ import { safeJSONParse, isPlainObject } from './utils';
 
 let _events: Record<string, Function[]> = {};
 
+/**
+ * True when the string could be a JSON object — an opening brace after optional whitespace.
+ */
+const looksLikeJSONObject = function (str: string): boolean {
+    return /^\s*\{/.test(str);
+}
+
 window.addEventListener('message', function (e: MessageEvent): void {
     var data: Record<string, any> | null = {};
 
     if(e.data) {
         if(typeof(e.data) === 'string') {
-            data = safeJSONParse(e.data)!;
+            // This listener sees every message posted to the host page, including those from
+            // analytics scripts, other widgets and browser extensions, which use string
+            // protocols of their own (Yandex Metrika, for one, sends `__ym__…` markers).
+            // Strings that cannot be our payload are dropped without parsing — running them
+            // through safeJSONParse would log a JSON error for each foreign message.
+            data = looksLikeJSONObject(e.data) ? safeJSONParse(e.data)! : null;
         }
         else {
             data = e.data;

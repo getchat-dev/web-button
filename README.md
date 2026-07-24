@@ -20,7 +20,7 @@ You can also use the legacy way and include the library on the page as follows:
     if (d.getElementById(id)) return
     js = d.createElement(s)
     js.id = id
-    js.src = 'https://unpkg.com/@getchat-dev/web-button@1.4.0/dist/browser.js'
+    js.src = 'https://unpkg.com/@getchat-dev/web-button@1.4.1/dist/browser.js'
     fjs.parentNode.insertBefore(js, fjs)
 }(document, 'script', 'getchat-jssdk'))
 ```
